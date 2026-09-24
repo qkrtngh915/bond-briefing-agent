@@ -29,12 +29,15 @@ def _fmt_tranche(t: dict) -> str:
     for k in [
         "maturity",
         "initial_offering_amount_billion_won",
+        "initial_offering_amount_raw",
         "demand_participation_amount_billion_won",
+        "demand_participation_amount_raw",
         "competition_ratio",
         "coupon_guidance_band_bp",
         "final_spread_bp",
         "upsized",
         "final_issue_amount_billion_won",
+        "final_issue_amount_raw",
     ]:
         lines.append(f"    {k}: {t.get(k)}")
     flags = t.get("_validation", {}).get("flags", [])

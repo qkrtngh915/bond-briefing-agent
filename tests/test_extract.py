@@ -1,12 +1,12 @@
 """agent/extract.py 단위 테스트: MockLLMBackend로 실제 모델 호출 없이 다중 회차
-추출 흐름과 회차별 코드 검증(_validate_tranche) 로직을 검증한다.
+추출 흐름, 코드 레벨 금액 환산(_to_eok_won), 회차별 검증(_validate_tranche)을 검증한다.
 """
 
 from __future__ import annotations
 
 import pytest
 
-from agent.extract import EXTRACTION_TOOL, extract_filing
+from agent.extract import EXTRACTION_TOOL, _to_eok_won, extract_filing
 from agent.llm_backend import LLMResponse, MockLLMBackend, ToolUseBlock
 
 
@@ -18,35 +18,88 @@ def _mock_backend_returning(fields: dict) -> MockLLMBackend:
     return MockLLMBackend([response])
 
 
-_CONSISTENT_TRANCHE_1 = {
-    "series_label": "제26-1회",
-    "maturity": "2년",
-    "initial_offering_amount_billion_won": 400,
-    "demand_participation_amount_billion_won": 650,
-    "competition_ratio": 1.63,
-    "coupon_guidance_band_bp": {"low_bp": -40, "high_bp": 40},
-    "final_spread_bp": 38,
-    "upsized": True,
-    "final_issue_amount_billion_won": 650,
-}
+def _tranche(
+    label: str,
+    offering: dict | None,
+    participation: dict | None,
+    competition: float | None,
+    band: dict | None,
+    final_spread: float | None,
+    final_issue: dict | None,
+    upsized: bool | None = True,
+) -> dict:
+    return {
+        "series_label": label,
+        "maturity": "2년",
+        "initial_offering_amount": offering,
+        "demand_participation_amount": participation,
+        "competition_ratio": competition,
+        "coupon_guidance_band_bp": band,
+        "final_spread_bp": final_spread,
+        "upsized": upsized,
+        "final_issue_amount": final_issue,
+    }
 
-_CONSISTENT_TRANCHE_2 = {
-    "series_label": "제26-2회",
-    "maturity": "3년",
-    "initial_offering_amount_billion_won": 300,
-    "demand_participation_amount_billion_won": 750,
-    "competition_ratio": 2.5,
-    "coupon_guidance_band_bp": {"low_bp": -60, "high_bp": 60},
-    "final_spread_bp": 55,
-    "upsized": True,
-    "final_issue_amount_billion_won": 750,
-}
+
+# 400억원 모집, 650억원 참여, 경쟁률 1.63배(650/400=1.625), 밴드 ±40bp, 확정 38bp,
+# 최종 발행 650억(650/400=1.625배, 0.5~2.5 범위 안).
+_CONSISTENT_TRANCHE_1 = _tranche(
+    "제26-1회",
+    {"value": 400, "unit": "억원"},
+    {"value": 650, "unit": "억원"},
+    1.63,
+    {"low_bp": -40, "high_bp": 40},
+    38,
+    {"value": 650, "unit": "억원"},
+)
+
+# 300억원 모집, 750억원 참여, 경쟁률 2.5배, 밴드 ±60bp, 확정 55bp, 최종 750억.
+_CONSISTENT_TRANCHE_2 = _tranche(
+    "제26-2회",
+    {"value": 300, "unit": "억원"},
+    {"value": 750, "unit": "억원"},
+    2.5,
+    {"low_bp": -60, "high_bp": 60},
+    55,
+    {"value": 750, "unit": "억원"},
+)
 
 _CONSISTENT_FIELDS = {
     "issuer": "가나다전자",
     "credit_rating": "AA-",
     "tranches": [_CONSISTENT_TRANCHE_1, _CONSISTENT_TRANCHE_2],
 }
+
+
+def test_to_eok_won_converts_units_correctly():
+    assert _to_eok_won({"value": 210, "unit": "억원"}) == 210.0
+    assert _to_eok_won({"value": 21_000_000_000, "unit": "원"}) == 210.0  # 실제 사고 재현: 이게 21억이 아니라 210억이어야 함
+    assert _to_eok_won({"value": 21000, "unit": "백만원"}) == 210.0
+    assert _to_eok_won(None) is None
+    assert _to_eok_won({"value": None, "unit": "억원"}) is None
+    assert _to_eok_won({"value": 100, "unit": "알수없는단위"}) is None
+
+
+def test_extract_filing_converts_amounts_in_code_not_llm():
+    """LLM이 억원으로 환산하지 않고 원문 그대로(원 단위)를 줘도, 코드가 정확히
+    억원으로 환산해야 한다 - 실제로 있었던 10배 축소 사고(21억 vs 210억) 재현."""
+    tranche = _tranche(
+        "제155-1회",
+        {"value": 21_000_000_000, "unit": "원"},  # "이백일십억원 (₩21,000,000,000)"
+        None,
+        None,
+        None,
+        None,
+        {"value": 21_000_000_000, "unit": "원"},
+    )
+    backend = _mock_backend_returning({"issuer": "대한전선", "credit_rating": None, "tranches": [tranche]})
+
+    result = extract_filing("가짜 원문 텍스트", backend)
+
+    t = result["tranches"][0]
+    assert t["initial_offering_amount_billion_won"] == 210.0
+    assert t["initial_offering_amount_raw"] == {"value": 21_000_000_000, "unit": "원"}
+    assert t["final_issue_amount_billion_won"] == 210.0
 
 
 def test_extract_filing_returns_multiple_tranches_with_validation():
@@ -57,6 +110,7 @@ def test_extract_filing_returns_multiple_tranches_with_validation():
     assert result["credit_rating"] == "AA-"
     assert len(result["tranches"]) == 2
     assert result["tranches"][0]["series_label"] == "제26-1회"
+    assert result["tranches"][0]["initial_offering_amount_billion_won"] == 400.0
     assert result["tranches"][0]["_validation"]["flags"] == []
     assert result["tranches"][1]["series_label"] == "제26-2회"
     assert result["tranches"][1]["_validation"]["flags"] == []
@@ -92,6 +146,20 @@ def test_extract_filing_flags_final_spread_outside_band():
     assert "밴드" in flags2[0]
 
 
+def test_extract_filing_flags_final_issue_amount_ratio_out_of_range():
+    tranche1 = dict(_CONSISTENT_TRANCHE_1)
+    # 모집 400억인데 최종 발행이 2000억 (5배) - 상식적 범위(0.5~2.5배) 밖.
+    tranche1["final_issue_amount"] = {"value": 2000, "unit": "억원"}
+    fields = {"issuer": "가나다전자", "credit_rating": "AA-", "tranches": [tranche1]}
+    backend = _mock_backend_returning(fields)
+
+    result = extract_filing("가짜 원문 텍스트", backend)
+
+    flags = result["tranches"][0]["_validation"]["flags"]
+    assert len(flags) == 1
+    assert "최종발행금액/모집금액 비율" in flags[0]
+
+
 def test_extract_filing_single_tranche_when_only_one_series():
     fields = {"issuer": "라마바건설", "credit_rating": "BBB+", "tranches": [_CONSISTENT_TRANCHE_1]}
     backend = _mock_backend_returning(fields)
@@ -103,7 +171,7 @@ def test_extract_filing_single_tranche_when_only_one_series():
 def test_extract_filing_no_flags_when_values_are_null():
     tranche1 = dict(_CONSISTENT_TRANCHE_1)
     tranche1["competition_ratio"] = None
-    tranche1["demand_participation_amount_billion_won"] = None
+    tranche1["demand_participation_amount"] = None
     fields = {"issuer": "가나다전자", "credit_rating": "AA-", "tranches": [tranche1]}
     backend = _mock_backend_returning(fields)
 
