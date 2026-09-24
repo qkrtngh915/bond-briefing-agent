@@ -89,7 +89,11 @@ def test_dispatch_get_bond_demand_forecasts_requires_backend():
         dispatch("get_bond_demand_forecasts", {"date": "2026-09-23"}, backend=None)
 
 
-def test_dispatch_get_bond_demand_forecasts_wires_dart_and_extract(monkeypatch):
+def test_dispatch_get_bond_demand_forecasts_wires_dart_and_extract(monkeypatch, tmp_path):
+    import agent.extract as extract_module
+
+    monkeypatch.setattr(extract_module, "EXTRACTED_CACHE_DIR", tmp_path)
+
     seen = {}
 
     def fake_list_bond_filings(start_date, end_date):
@@ -106,27 +110,32 @@ def test_dispatch_get_bond_demand_forecasts_wires_dart_and_extract(monkeypatch):
 
     monkeypatch.setattr(tools_schema.dart, "list_bond_filings", fake_list_bond_filings)
     monkeypatch.setattr(tools_schema.dart, "fetch_filing_text", fake_fetch_filing_text)
-
-    import agent.extract as extract_module
-
     monkeypatch.setattr(extract_module, "extract_filing", lambda text, backend: {"issuer": "A사", "_validation": {"flags": []}})
 
     result = dispatch("get_bond_demand_forecasts", {"date": "2026-09-23", "days": 3}, backend=object())
 
     assert seen["dates"] == ("2026-09-20", "2026-09-23")
     assert len(result) == 2
+    # rcept_dt 내림차순 정렬 -> rcept_no="1"(2026-09-22)이 먼저.
+    assert result[0]["rcept_no"] == "1"
     assert result[0]["extraction"]["issuer"] == "A사"
+    assert result[1]["rcept_no"] == "2"
     assert result[1]["extraction"] is None
     assert result[1]["note"] == "수요예측 섹션을 찾지 못함"
 
 
-def test_get_bond_demand_forecasts_caps_extraction_count(monkeypatch):
-    """비용 보호: 기간 내 필링이 많아도 max_filings건까지만 실제로 추출한다.
+def test_get_bond_demand_forecasts_caps_new_extractions_but_not_cached(monkeypatch, tmp_path):
+    """비용 보호: 캐시에 없는("신규") 필링만 max_new_extractions건까지 추출한다.
+    이미 캐시된 건은 이 상한과 무관하게 전부 결과에 포함되어야 한다.
 
     2026-09-11 기준 실제 실행에서 5일 조회에 22건이 잡혀 LLM 호출 22회를
     유발한 것을 발견하고 추가한 안전장치."""
+    import agent.extract as extract_module
+
+    monkeypatch.setattr(extract_module, "EXTRACTED_CACHE_DIR", tmp_path)
+
     many_filings = [
-        {"rcept_no": str(i), "corp_name": f"{i}사", "report_nm": "증권신고서(채무증권)", "rcept_dt": "2026-09-2" + str(i % 3), "is_correction": False}
+        {"rcept_no": str(i), "corp_name": f"{i}사", "report_nm": "증권신고서(채무증권)", "rcept_dt": f"2026-09-{10 + i:02d}", "is_correction": False}
         for i in range(20)
     ]
     monkeypatch.setattr(tools_schema.dart, "list_bond_filings", lambda start, end: many_filings)
@@ -142,11 +151,87 @@ def test_get_bond_demand_forecasts_caps_extraction_count(monkeypatch):
         call_count["n"] += 1
         return {"issuer": "테스트", "_validation": {"flags": []}}
 
-    import agent.extract as extract_module
-
     monkeypatch.setattr(extract_module, "extract_filing", fake_extract)
 
-    result = tools_schema.get_bond_demand_forecasts("2026-09-23", 5, object())
+    # 미리 3건을 "캐시됨" 상태로 만들어 둔다 - 이 3건은 상한과 무관하게 결과에 포함되어야 한다.
+    for i in [0, 1, 2]:
+        extract_module.save_cached_extraction(str(i), {"issuer": f"캐시된{i}사", "_validation": {"flags": []}})
 
-    assert len(result) == tools_schema._MAX_FORECAST_FILINGS
-    assert call_count["n"] == tools_schema._MAX_FORECAST_FILINGS
+    result = tools_schema.get_bond_demand_forecasts("2026-09-23", 30, object())
+
+    cached_results = [r for r in result if r["rcept_no"] in ("0", "1", "2")]
+    assert len(cached_results) == 3
+    assert all(r["extraction"]["issuer"].startswith("캐시된") for r in cached_results)
+
+    # 캐시 안 된 17건 중 신규 추출은 5건까지만.
+    newly_extracted = [r for r in result if r["extraction"] is not None and not r["extraction"]["issuer"].startswith("캐시된")]
+    skipped = [r for r in result if r["extraction"] is None]
+    assert call_count["n"] == tools_schema._MAX_NEW_EXTRACTIONS_PER_CALL
+    assert len(newly_extracted) == tools_schema._MAX_NEW_EXTRACTIONS_PER_CALL
+    assert len(skipped) == 20 - 3 - tools_schema._MAX_NEW_EXTRACTIONS_PER_CALL
+    assert all("상한" in r["note"] for r in skipped)
+
+
+def test_get_bond_demand_forecasts_sorted_by_rcept_dt_descending(monkeypatch, tmp_path):
+    import agent.extract as extract_module
+
+    monkeypatch.setattr(extract_module, "EXTRACTED_CACHE_DIR", tmp_path)
+
+    filings = [
+        {"rcept_no": "1", "corp_name": "먼저접수", "report_nm": "증권신고서(채무증권)", "rcept_dt": "2026-09-10", "is_correction": False},
+        {"rcept_no": "2", "corp_name": "나중접수", "report_nm": "증권신고서(채무증권)", "rcept_dt": "2026-09-20", "is_correction": False},
+    ]
+    monkeypatch.setattr(tools_schema.dart, "list_bond_filings", lambda start, end: filings)
+    monkeypatch.setattr(
+        tools_schema.dart,
+        "fetch_filing_text",
+        lambda rcept_no: {"rcept_no": rcept_no, "full_text_length": 10, "demand_forecast_section": "내용"},
+    )
+    monkeypatch.setattr(extract_module, "extract_filing", lambda text, backend: {"issuer": "테스트", "_validation": {"flags": []}})
+
+    result = tools_schema.get_bond_demand_forecasts("2026-09-23", 30, object())
+
+    assert [r["corp_name"] for r in result] == ["나중접수", "먼저접수"]
+
+
+def test_get_bond_demand_forecasts_second_call_same_date_makes_zero_llm_calls(monkeypatch, tmp_path):
+    """같은 검색 기간으로 두 번째 실행하면, 첫 실행에서 캐시된 결과 덕에
+    실제 LLM(backend.create_message) 호출이 0회여야 한다."""
+    import agent.extract as extract_module
+
+    monkeypatch.setattr(extract_module, "EXTRACTED_CACHE_DIR", tmp_path)
+
+    filings = [
+        {"rcept_no": "1", "corp_name": "A사", "report_nm": "증권신고서(채무증권)", "rcept_dt": "2026-09-22", "is_correction": False},
+        {"rcept_no": "2", "corp_name": "B사", "report_nm": "증권신고서(채무증권)", "rcept_dt": "2026-09-21", "is_correction": False},
+    ]
+    monkeypatch.setattr(tools_schema.dart, "list_bond_filings", lambda start, end: filings)
+    monkeypatch.setattr(
+        tools_schema.dart,
+        "fetch_filing_text",
+        lambda rcept_no: {"rcept_no": rcept_no, "full_text_length": 10, "demand_forecast_section": "내용"},
+    )
+
+    from agent.extract import EXTRACTION_TOOL
+    from agent.llm_backend import LLMResponse, MockLLMBackend, ToolUseBlock
+
+    def make_scripted_backend(n: int) -> MockLLMBackend:
+        script = [
+            LLMResponse(
+                content=[ToolUseBlock(id=f"x{i}", name=EXTRACTION_TOOL["name"], input={"issuer": "테스트", "credit_rating": None, "tranches": []})],
+                stop_reason="tool_use",
+            )
+            for i in range(n)
+        ]
+        return MockLLMBackend(script)
+
+    backend1 = make_scripted_backend(2)
+    result1 = tools_schema.get_bond_demand_forecasts("2026-09-23", 5, backend1)
+    assert backend1.call_count == 2  # 둘 다 신규 추출이라 LLM 호출 2회
+
+    # 두 번째 실행: 스크립트가 빈 MockLLMBackend를 줘서, 호출되는 즉시 실패하게 만든다.
+    backend2 = MockLLMBackend([])
+    result2 = tools_schema.get_bond_demand_forecasts("2026-09-23", 5, backend2)
+    assert backend2.call_count == 0
+
+    assert [r["extraction"] for r in result1] == [r["extraction"] for r in result2]

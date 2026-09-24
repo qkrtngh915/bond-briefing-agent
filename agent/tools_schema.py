@@ -104,8 +104,9 @@ TOOLS: list[dict[str, Any]] = [
             "검증한 값이며, 검증에 실패한 항목은 _validation.flags에 표시되어 있다. "
             "'크레딧 발행시장' 섹션을 쓰기 전에는 이상치 유무와 무관하게 항상 호출해야 "
             "한다 - 호출 없이 '최근 발행 없음'이라고 쓰면 안 된다. 실제로 빈 리스트가 "
-            "나오면 그때 '최근 회사채 수요예측 공시 없음'으로 짧게 쓴다. 비용 보호를 "
-            "위해 기간 내 최신 5건까지만 추출한다 (기간에 더 많은 공시가 있어도 5건까지)."
+            "나오면 그때 '최근 회사채 수요예측 공시 없음'으로 짧게 쓴다. 이미 추출한 "
+            "공시는 영구 캐시에서 읽으므로 개수 제한이 없고, 새로 추출해야 하는 공시만 "
+            "실행당 최대 5건으로 제한된다. 결과는 최근 수요예측(접수)일 순으로 정렬된다."
         ),
         "input_schema": {
             "type": "object",
@@ -122,39 +123,66 @@ TOOLS: list[dict[str, Any]] = [
 ]
 
 
-_MAX_FORECAST_FILINGS = 5
+_MAX_NEW_EXTRACTIONS_PER_CALL = 5
 
 
 def get_bond_demand_forecasts(
-    date: str, days: int, backend: Any, max_filings: int = _MAX_FORECAST_FILINGS
+    date: str, days: int, backend: Any, max_new_extractions: int = _MAX_NEW_EXTRACTIONS_PER_CALL
 ) -> list[dict[str, Any]]:
-    """최근 days일 내 회사채 수요예측 공시를 찾아 각각 원문을 받고 LLM으로 구조화 추출한다.
+    """최근 days일 내 회사채 수요예측 공시를 찾아 각각 원문을 받고 구조화 추출한다.
 
-    공시별로 fetch_filing_text (원문+수요예측 섹션 추출, 코드) ->
-    agent.extract.extract_filing (구조화 추출, LLM) 순서로 처리한다.
+    공시별로 캐시(data/extracted/{rcept_no}.json)를 먼저 확인한다 - 캐시에 있으면
+    실제 LLM을 호출하지 않고 그 결과를 그대로 쓴다. 캐시에 없는("신규") 공시만
+    fetch_filing_text (원문+수요예측 섹션 추출, 코드) -> agent.extract.extract_filing
+    (구조화 추출, LLM) 순서로 처리한다.
 
     비용 주의: extract_filing 호출은 필링 1건당 실제 LLM(Anthropic) 호출 1회다.
     days=5 기본값 기준으로도 검색 기간에 회사채 증권신고서/정정신고서가 20건
-    넘게 잡히는 경우가 실제로 있었다 (2026-09-11 기준 5일 조회에 22건) -
-    그대로 두면 브리핑 1회가 LLM 호출 20회 이상을 유발한다. 그래서 최신
-    max_filings건만 추출한다 (기본 5건). 매일 도는 GitHub Actions 워크플로가
-    이 비용을 반복적으로 발생시킨다는 점을 감안해서 비용을 제한하는 것.
+    넘게 잡히는 경우가 실제로 있었다 (2026-09-11 기준 5일 조회에 22건) - 캐시가
+    없던 시절엔 브리핑 1회가 LLM 호출 20회 이상을 유발했다. 그래서 "신규" 추출만
+    한 번 호출당 max_new_extractions건으로 제한한다 (기본 5건) - 이미 캐시된
+    공시는 이 상한과 무관하게 전부 결과에 포함된다. 상한에 걸려 이번엔 추출하지
+    못한 공시는 note로 표시되고, 다음 실행(예: 내일 아침)에서 처리된다.
+
+    Returns:
+        접수일자(rcept_dt) 내림차순으로 정렬된 리스트.
     """
-    from agent.extract import extract_filing  # 지연 임포트: 순환 임포트 방지
+    from agent.extract import extract_filing_cached, load_cached_extraction  # 지연 임포트: 순환 임포트 방지
 
     end = dt.date.fromisoformat(date)
     start = end - dt.timedelta(days=days)
-    filings = dart.list_bond_filings(start.isoformat(), end.isoformat())[:max_filings]
+    filings = dart.list_bond_filings(start.isoformat(), end.isoformat())
 
     results: list[dict[str, Any]] = []
+    new_extraction_count = 0
     for filing in filings:
-        doc = dart.fetch_filing_text(filing["rcept_no"])
+        rcept_no = filing["rcept_no"]
+        cached = load_cached_extraction(rcept_no)
+        if cached is not None:
+            results.append({**filing, "extraction": cached})
+            continue
+
+        if new_extraction_count >= max_new_extractions:
+            results.append(
+                {
+                    **filing,
+                    "extraction": None,
+                    "note": "신규 추출 상한(캐시 없음) 도달 - 다음 실행에서 처리 예정",
+                }
+            )
+            continue
+
+        doc = dart.fetch_filing_text(rcept_no)
         section = doc["demand_forecast_section"]
         if not section:
             results.append({**filing, "extraction": None, "note": "수요예측 섹션을 찾지 못함"})
             continue
-        extraction = extract_filing(section, backend)
+
+        extraction = extract_filing_cached(rcept_no, section, backend)
+        new_extraction_count += 1
         results.append({**filing, "extraction": extraction})
+
+    results.sort(key=lambda f: f["rcept_dt"], reverse=True)
     return results
 
 

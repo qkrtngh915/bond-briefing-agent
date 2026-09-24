@@ -47,14 +47,18 @@ jobs:
           ANTHROPIC_MODEL: ${{ vars.ANTHROPIC_MODEL }}
         run: python scripts/run_briefing.py
 
-      - name: Commit and push generated report/log
+      - name: Commit and push generated report/log/extraction cache
         if: steps.check_day.outcome == 'success'
         run: |
           git config user.name "daily-briefing-bot"
           git config user.email "actions@users.noreply.github.com"
-          git add reports/ logs/
+          # data/extracted/ 는 DART 추출 결과의 영구 캐시다 - 커밋해야 다음
+          # 실행(내일)도 캐시를 재사용해서 이미 처리한 공시를 다시 LLM으로
+          # 추출하지 않는다 (커밋 안 하면 매 실행이 새 checkout이라 캐시가
+          # 매번 사라져서 "영구" 캐시가 의미 없어짐).
+          git add reports/ logs/ data/extracted/
           if git diff --cached --quiet; then
-            echo "새로 생성된 리포트/로그가 없습니다."
+            echo "새로 생성된 리포트/로그/캐시가 없습니다."
           else
             git commit -m "Daily briefing $(date -u +%F)"
             git push

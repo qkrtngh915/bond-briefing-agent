@@ -6,7 +6,16 @@ from __future__ import annotations
 
 import pytest
 
-from agent.extract import EXTRACTION_TOOL, _to_eok_won, extract_filing
+import agent.extract as extract_module
+from agent.extract import (
+    EXTRACT_PROMPT_VERSION,
+    EXTRACTION_TOOL,
+    _to_eok_won,
+    extract_filing,
+    extract_filing_cached,
+    load_cached_extraction,
+    save_cached_extraction,
+)
 from agent.llm_backend import LLMResponse, MockLLMBackend, ToolUseBlock
 
 
@@ -187,3 +196,60 @@ def test_extract_filing_raises_if_no_tool_call_returned():
     )
     with pytest.raises(RuntimeError):
         extract_filing("가짜 원문 텍스트", backend)
+
+
+# --- 영구 캐시 (data/extracted/{rcept_no}.json) 테스트 ---------------------
+
+
+def test_load_cached_extraction_returns_none_when_no_file(tmp_path, monkeypatch):
+    monkeypatch.setattr(extract_module, "EXTRACTED_CACHE_DIR", tmp_path)
+    assert load_cached_extraction("99999999999999") is None
+
+
+def test_save_and_load_cached_extraction_roundtrip(tmp_path, monkeypatch):
+    monkeypatch.setattr(extract_module, "EXTRACTED_CACHE_DIR", tmp_path)
+    result = {"issuer": "가나다전자", "credit_rating": "AA-", "tranches": []}
+
+    save_cached_extraction("20260921000241", result)
+    loaded = load_cached_extraction("20260921000241")
+
+    assert loaded == result
+    assert (tmp_path / "20260921000241.json").exists()
+
+
+def test_load_cached_extraction_invalidated_by_prompt_version_change(tmp_path, monkeypatch):
+    monkeypatch.setattr(extract_module, "EXTRACTED_CACHE_DIR", tmp_path)
+    save_cached_extraction("1", {"issuer": "구버전", "tranches": []})
+
+    # 프롬프트 버전이 올라간 것처럼 시뮬레이션.
+    monkeypatch.setattr(extract_module, "EXTRACT_PROMPT_VERSION", "999-different")
+
+    assert load_cached_extraction("1") is None
+
+
+def test_extract_filing_cached_second_call_does_not_touch_backend(tmp_path, monkeypatch):
+    """캐시가 있으면 backend.create_message를 전혀 호출하지 않는다."""
+    monkeypatch.setattr(extract_module, "EXTRACTED_CACHE_DIR", tmp_path)
+
+    backend1 = _mock_backend_returning(_CONSISTENT_FIELDS)
+    result1 = extract_filing_cached("20260921000241", "원문", backend1)
+    assert backend1.call_count == 1
+
+    # 두 번째 호출: 스크립트가 빈 백엔드 - 호출되면 즉시 RuntimeError.
+    backend2 = MockLLMBackend([])
+    result2 = extract_filing_cached("20260921000241", "원문", backend2)
+    assert backend2.call_count == 0
+    assert result2 == result1
+
+
+def test_extract_filing_cached_stores_current_prompt_version(tmp_path, monkeypatch):
+    monkeypatch.setattr(extract_module, "EXTRACTED_CACHE_DIR", tmp_path)
+    backend = _mock_backend_returning(_CONSISTENT_FIELDS)
+
+    extract_filing_cached("20260921000404", "원문", backend)
+
+    import json
+
+    payload = json.loads((tmp_path / "20260921000404.json").read_text(encoding="utf-8"))
+    assert payload["extract_prompt_version"] == EXTRACT_PROMPT_VERSION
+    assert payload["rcept_no"] == "20260921000404"

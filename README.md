@@ -104,7 +104,7 @@ flowchart LR
 | 모델이 미국 금리 변동을 스스로 계산해서 씀 | `get_us_yields`는 레벨만 주고 전일 대비 변동을 제공하는 툴이 없어서, 모델이 두 레벨을 직접 빼서 "-5bp"를 만들어냄 | 프롬프트에 "미국 금리는 레벨로만 언급, 변동폭 직접 계산 금지" 명시 |
 | 다중 회차 공시에서 모집금액이 10배 축소됨 | "이백일십억원(₩21,000,000,000)"을 210억이 아니라 21억으로 환산 | 처음엔 프롬프트로 고쳤다가, 재발 방지 차원에서 아예 LLM은 원문 숫자+단위만 추출하고 억원 환산은 코드(`_to_eok_won`)가 하도록 구조 변경 |
 | (선택 툴로 분류된) `get_bond_demand_forecasts`를 호출 안 하고 "최근 발행 없음"이라 근거 없이 씀 | 이상치가 없는 날 모델이 이 툴을 완전히 스킵 - 숫자가 아니라 verify.py도 못 잡는 환각 | 이 툴은 이상치 유무와 무관하게 섹션 6 작성 시 항상 호출하도록 재분류 |
-| `get_bond_demand_forecasts` 한 번 호출이 실제 LLM 호출을 수십 회 유발 | 필링 1건당 `extract_filing` 1회를 호출하는데, 5일 조회에도 증권신고서/정정신고서가 20건 넘게 잡히는 경우가 있음(실측: 2026-09-11 기준 22건) | 최신 5건까지만 추출하도록 `max_filings` 상한 추가 (매일 도는 워크플로에서 반복되는 비용이라 특히 중요) |
+| `get_bond_demand_forecasts` 한 번 호출이 실제 LLM 호출을 수십 회 유발 | 필링 1건당 `extract_filing` 1회를 호출하는데, 5일 조회에도 증권신고서/정정신고서가 20건 넘게 잡히는 경우가 있음(실측: 2026-09-11 기준 22건) | `data/extracted/{rcept_no}.json`에 추출 결과를 영구 캐시하고, 캐시에 없는("신규") 공시만 실행당 5건으로 제한 (캐시된 건은 상한과 무관하게 전부 포함) |
 
 ## 한계
 
@@ -141,9 +141,22 @@ LLM_BACKEND=anthropic python scripts/run_briefing.py 2026-09-23    # 실제 모�
 # 최근 회사채 수요예측 공시 원문+추출결과 나란히 보기 (DART_API_KEY 필요)
 python scripts/review_bond_extractions.py
 
+# 최근 N일 공시 추출을 미리 캐시에 채워두기 (기본 --dry-run: 대상 건수만 출력, 비용 없음)
+python scripts/backfill_extract.py --days 14
+python scripts/backfill_extract.py --days 14 --no-dry-run   # 실제로 채움, 비용 발생
+
 # 테스트 (ECOS/FRED/뉴스 스모크 테스트는 .env 키 필요. 나머지는 Mock/가짜 데이터라 비용 없음)
 python -m pytest tests/ -v
 ```
+
+`get_bond_demand_forecasts`가 추출한 결과는 `data/extracted/{rcept_no}.json`에
+영구 캐시된다 - 같은 공시를 다시 만나면 실제 LLM을 호출하지 않고 캐시를
+그대로 쓴다. 캐시에 없는("신규") 공시만 한 번 호출당 최대 5건까지 추출하고,
+그 이상은 다음 실행에서 처리한다 (캐시된 건은 이 상한과 무관하게 항상 전부
+포함). 캐시는 `agent/extract.py`의 `EXTRACT_PROMPT_VERSION`을 저장해두고,
+그 값이 바뀌면(추출 스키마/프롬프트 변경) 자동으로 무효화되어 재추출한다.
+이 캐시는 `.gitignore`에 없다 - GitHub Actions가 매번 새 checkout이라,
+캐시를 커밋하지 않으면 "영구" 캐시가 매일 사라지기 때문이다.
 
 `.env`의 `ECOS_API_KEY`/`FRED_API_KEY`/`DART_API_KEY`는 각각
 [ecos.bok.or.kr](https://ecos.bok.or.kr) · [FRED](https://fred.stlouisfed.org/docs/api/api_key.html) ·
@@ -161,11 +174,14 @@ bond_agent/
 agent/
   prompts.py, llm_backend.py, tools_schema.py, loop.py, extract.py, verify.py
 scripts/         demo_today.py, run_briefing.py, review_bond_extractions.py,
-                 check_business_day.py, lookup_ecos_codes.py, generate_extract_check.py
+                 check_business_day.py, lookup_ecos_codes.py, generate_extract_check.py,
+                 backfill_extract.py
 tests/           각 모듈별 단위/스모크 테스트
 docs/            extract_check.md, agent_decision_comparison.md (검증 근거)
 .github/workflows/daily_briefing.yml   매 평일 07:30 KST 자동 실행
-data/cache/, logs/, reports/
+data/cache/      API 응답 캐시 (당일 무효화, dart/ 하위는 원문 영구 캐시)
+data/extracted/  DART 추출 결과 영구 캐시 (rcept_no별, git에 커밋됨)
+logs/, reports/
 ```
 
 ## 로드맵

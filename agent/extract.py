@@ -22,11 +22,21 @@ LLM 백엔드는 agent.llm_backend.LLMBackend 인터페이스를 그대로 재�
 
 from __future__ import annotations
 
+import json
+from pathlib import Path
 from typing import Any
 
 from agent.llm_backend import LLMBackend, ToolUseBlock
+from bond_agent.config import BASE_DIR
 
 _EXTRACT_TOOL_NAME = "record_bond_demand_extraction"
+
+# 공시(rcept_no)별 추출 결과 영구 캐시. DART 원문(data/cache/dart/)과 달리,
+# 이건 "LLM이 그 원문에서 뽑아낸 결과"를 캐시하는 것 - 같은 공시를 다시 만나면
+# 실제 LLM 호출(비용) 없이 이 캐시를 그대로 쓴다. EXTRACT_PROMPT_VERSION이
+# 바뀌면(추출 스키마/프롬프트가 바뀌면) 캐시를 무효화하고 재추출한다.
+EXTRACTED_CACHE_DIR = BASE_DIR / "data" / "extracted"
+EXTRACTED_CACHE_DIR.mkdir(parents=True, exist_ok=True)
 
 # EXTRACTION_TOOL(입력 스키마) 또는 _EXTRACT_SYSTEM_PROMPT가 바뀔 때마다 올린다.
 # data/extracted/ 캐시가 이 값을 저장해두고, 값이 바뀌면 캐시를 무효화하고
@@ -226,6 +236,56 @@ def extract_filing(text: str, backend: LLMBackend) -> dict[str, Any]:
         "credit_rating": raw.get("credit_rating"),
         "tranches": validated_tranches,
     }
+
+
+def _cache_path(rcept_no: str) -> Path:
+    return EXTRACTED_CACHE_DIR / f"{rcept_no}.json"
+
+
+def load_cached_extraction(rcept_no: str) -> dict[str, Any] | None:
+    """rcept_no의 캐시된 추출 결과를 읽는다.
+
+    캐시 파일이 없거나, 저장된 extract_prompt_version이 지금
+    EXTRACT_PROMPT_VERSION과 다르면(추출 스키마/프롬프트가 바뀌었으면) None을
+    반환해서 재추출을 유도한다.
+    """
+    path = _cache_path(rcept_no)
+    if not path.exists():
+        return None
+    try:
+        payload = json.loads(path.read_text(encoding="utf-8"))
+    except (json.JSONDecodeError, OSError):
+        return None
+    if payload.get("extract_prompt_version") != EXTRACT_PROMPT_VERSION:
+        return None
+    return payload.get("result")
+
+
+def save_cached_extraction(rcept_no: str, result: dict[str, Any]) -> None:
+    """추출 결과를 data/extracted/{rcept_no}.json 에 영구 저장한다."""
+    payload = {
+        "rcept_no": rcept_no,
+        "extract_prompt_version": EXTRACT_PROMPT_VERSION,
+        "result": result,
+    }
+    _cache_path(rcept_no).write_text(
+        json.dumps(payload, ensure_ascii=False, indent=2), encoding="utf-8"
+    )
+
+
+def extract_filing_cached(rcept_no: str, text: str, backend: LLMBackend) -> dict[str, Any]:
+    """extract_filing()을 rcept_no별 영구 캐시로 감싼다.
+
+    캐시에 있고 프롬프트 버전이 일치하면 실제 LLM을 전혀 호출하지 않고 그
+    결과를 그대로 반환한다. 없으면 extract_filing()을 호출하고 결과를
+    캐시에 저장한 뒤 반환한다.
+    """
+    cached = load_cached_extraction(rcept_no)
+    if cached is not None:
+        return cached
+    result = extract_filing(text, backend)
+    save_cached_extraction(rcept_no, result)
+    return result
 
 
 def _finalize_tranche(tranche: dict[str, Any]) -> dict[str, Any]:
