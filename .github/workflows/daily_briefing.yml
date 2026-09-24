@@ -1,0 +1,61 @@
+name: Daily Bond Briefing
+
+# 한국시간(KST, UTC+9) 평일 07:30 실행.
+# cron은 UTC 기준이라 하루 전날 22:30 UTC로 지정한다:
+#   UTC 일/월/화/수/목 22:30 == KST 월/화/수/목/금 07:30
+# (GitHub Actions cron의 요일은 0=일요일 ~ 6=토요일)
+"on":
+  schedule:
+    - cron: "30 22 * * 0-4"
+  workflow_dispatch: {}
+
+permissions:
+  contents: write
+
+jobs:
+  briefing:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Install dependencies
+        run: python -m pip install -r requirements.txt
+
+      - name: Check if today (KST) is a Korean business day
+        id: check_day
+        run: python scripts/check_business_day.py
+        continue-on-error: true
+
+      - name: Skip (weekend or KR holiday)
+        if: steps.check_day.outcome == 'failure'
+        run: echo "한국 영업일이 아니므로 오늘은 브리핑을 건너뜁니다."
+
+      - name: Run daily briefing
+        if: steps.check_day.outcome == 'success'
+        env:
+          ECOS_API_KEY: ${{ secrets.ECOS_API_KEY }}
+          FRED_API_KEY: ${{ secrets.FRED_API_KEY }}
+          DART_API_KEY: ${{ secrets.DART_API_KEY }}
+          ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
+          LLM_BACKEND: anthropic
+          ANTHROPIC_MODEL: ${{ vars.ANTHROPIC_MODEL }}
+        run: python scripts/run_briefing.py
+
+      - name: Commit and push generated report/log
+        if: steps.check_day.outcome == 'success'
+        run: |
+          git config user.name "daily-briefing-bot"
+          git config user.email "actions@users.noreply.github.com"
+          git add reports/ logs/
+          if git diff --cached --quiet; then
+            echo "새로 생성된 리포트/로그가 없습니다."
+          else
+            git commit -m "Daily briefing $(date -u +%F)"
+            git push
+          fi
