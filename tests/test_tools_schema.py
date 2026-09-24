@@ -118,3 +118,35 @@ def test_dispatch_get_bond_demand_forecasts_wires_dart_and_extract(monkeypatch):
     assert result[0]["extraction"]["issuer"] == "A사"
     assert result[1]["extraction"] is None
     assert result[1]["note"] == "수요예측 섹션을 찾지 못함"
+
+
+def test_get_bond_demand_forecasts_caps_extraction_count(monkeypatch):
+    """비용 보호: 기간 내 필링이 많아도 max_filings건까지만 실제로 추출한다.
+
+    2026-09-11 기준 실제 실행에서 5일 조회에 22건이 잡혀 LLM 호출 22회를
+    유발한 것을 발견하고 추가한 안전장치."""
+    many_filings = [
+        {"rcept_no": str(i), "corp_name": f"{i}사", "report_nm": "증권신고서(채무증권)", "rcept_dt": "2026-09-2" + str(i % 3), "is_correction": False}
+        for i in range(20)
+    ]
+    monkeypatch.setattr(tools_schema.dart, "list_bond_filings", lambda start, end: many_filings)
+    monkeypatch.setattr(
+        tools_schema.dart,
+        "fetch_filing_text",
+        lambda rcept_no: {"rcept_no": rcept_no, "full_text_length": 100, "demand_forecast_section": "내용"},
+    )
+
+    call_count = {"n": 0}
+
+    def fake_extract(text, backend):
+        call_count["n"] += 1
+        return {"issuer": "테스트", "_validation": {"flags": []}}
+
+    import agent.extract as extract_module
+
+    monkeypatch.setattr(extract_module, "extract_filing", fake_extract)
+
+    result = tools_schema.get_bond_demand_forecasts("2026-09-23", 5, object())
+
+    assert len(result) == tools_schema._MAX_FORECAST_FILINGS
+    assert call_count["n"] == tools_schema._MAX_FORECAST_FILINGS

@@ -104,7 +104,8 @@ TOOLS: list[dict[str, Any]] = [
             "검증한 값이며, 검증에 실패한 항목은 _validation.flags에 표시되어 있다. "
             "'크레딧 발행시장' 섹션을 쓰기 전에는 이상치 유무와 무관하게 항상 호출해야 "
             "한다 - 호출 없이 '최근 발행 없음'이라고 쓰면 안 된다. 실제로 빈 리스트가 "
-            "나오면 그때 '최근 회사채 수요예측 공시 없음'으로 짧게 쓴다."
+            "나오면 그때 '최근 회사채 수요예측 공시 없음'으로 짧게 쓴다. 비용 보호를 "
+            "위해 기간 내 최신 5건까지만 추출한다 (기간에 더 많은 공시가 있어도 5건까지)."
         ),
         "input_schema": {
             "type": "object",
@@ -121,17 +122,29 @@ TOOLS: list[dict[str, Any]] = [
 ]
 
 
-def get_bond_demand_forecasts(date: str, days: int, backend: Any) -> list[dict[str, Any]]:
+_MAX_FORECAST_FILINGS = 5
+
+
+def get_bond_demand_forecasts(
+    date: str, days: int, backend: Any, max_filings: int = _MAX_FORECAST_FILINGS
+) -> list[dict[str, Any]]:
     """최근 days일 내 회사채 수요예측 공시를 찾아 각각 원문을 받고 LLM으로 구조화 추출한다.
 
     공시별로 fetch_filing_text (원문+수요예측 섹션 추출, 코드) ->
     agent.extract.extract_filing (구조화 추출, LLM) 순서로 처리한다.
+
+    비용 주의: extract_filing 호출은 필링 1건당 실제 LLM(Anthropic) 호출 1회다.
+    days=5 기본값 기준으로도 검색 기간에 회사채 증권신고서/정정신고서가 20건
+    넘게 잡히는 경우가 실제로 있었다 (2026-09-11 기준 5일 조회에 22건) -
+    그대로 두면 브리핑 1회가 LLM 호출 20회 이상을 유발한다. 그래서 최신
+    max_filings건만 추출한다 (기본 5건). 매일 도는 GitHub Actions 워크플로가
+    이 비용을 반복적으로 발생시킨다는 점을 감안해서 비용을 제한하는 것.
     """
     from agent.extract import extract_filing  # 지연 임포트: 순환 임포트 방지
 
     end = dt.date.fromisoformat(date)
     start = end - dt.timedelta(days=days)
-    filings = dart.list_bond_filings(start.isoformat(), end.isoformat())
+    filings = dart.list_bond_filings(start.isoformat(), end.isoformat())[:max_filings]
 
     results: list[dict[str, Any]] = []
     for filing in filings:
