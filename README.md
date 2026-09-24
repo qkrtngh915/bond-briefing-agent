@@ -1,210 +1,172 @@
 # 데일리 채권시장 브리핑 에이전트
 
-채권운용 데스크용 모닝 코멘트 생성 에이전트. `anthropic` Python SDK로 직접
-구현한 tool-use 루프가 아래 툴들을 호출해서 브리핑을 생성한다 (Claude Agent
-SDK는 사용하지 않음 — in-process MCP 대신, Messages API의 tool_use를 직접
-처리하는 방식). LLM 호출부는 인터페이스로 분리되어 있어서, API 키 없이
-`MockLLMBackend`로 전체 흐름을 테스트할 수 있다.
+국내 자산운용사 채권운용본부용 모닝 브리핑을 매 영업일 아침 자동 생성하는
+에이전트. 숫자는 전부 코드로 계산하고, LLM은 "어떤 조사를 할지 판단"과
+"서술"만 담당한다.
 
-## 설계 원칙
+**샘플 리포트**: [이상치가 있던 날 (2026-09-11)](reports/2026-09-11.md) ·
+[조용한 날 (2026-09-21)](reports/2026-09-21.md)
 
-- **숫자는 전부 코드로 계산한다.** LLM은 해석/서술과 "어떤 툴을 호출할지"만
-  담당하고, 숫자를 스스로 계산하거나 추정하지 않는다.
-- 리포트에 등장하는 모든 %/bp 숫자는 [agent/verify.py](agent/verify.py)가 실제
-  툴 결과와 대조해서 불일치하면 경고 섹션을 붙인다 (마지막 안전망).
-- 툴 함수는 순수 함수(입출력이 JSON 직렬화 가능한 dict/list)로 만든다.
-- API 키는 `.env`에서 읽는다 (`ECOS_API_KEY`, `FRED_API_KEY`, `DART_API_KEY`,
-  `ANTHROPIC_API_KEY`).
-- 같은 날 재호출 시 API를 다시 부르지 않도록 `data/cache/`에 로컬 캐시한다
-  (DART 원문은 접수번호별로 영구 캐시 - 내용이 바뀌지 않으므로).
-- 모든 툴 호출/결과는 `logs/YYYY-MM-DD.jsonl`에 한 줄씩 기록한다 (에이전트가
-  어떤 순서로 어떤 툴을 호출했는지 나중에 확인하기 위함).
-- LLM 백엔드는 [agent/llm_backend.py](agent/llm_backend.py)의 `LLMBackend`
-  인터페이스로 추상화되어 있다. `LLM_BACKEND=mock`(기본값)이면 API 키 없이
-  미리 정해둔 tool_use 시퀀스를 재생하는 `MockLLMBackend`를 쓰고,
-  `LLM_BACKEND=anthropic`이면 실제 Anthropic Messages API를 호출한다
-  (`AnthropicLLMBackend`, 비용 발생).
+## 왜 만들었나
 
-## 폴더 구조
+채권운용역의 아침 루틴은 대체로 똑같다 - 밤새 국고채/크레딧 금리가 얼마나
+움직였는지 확인하고, 특이한 움직임이 있으면 원인이 될 만한 뉴스를 찾고,
+최근 회사채 발행이 있었으면 수요예측 결과를 훑어본다. 이 작업 자체는
+반복적이고 데이터 소스가 정해져 있는데, "오늘은 뭘 봐야 하는지"를 매번
+사람이 판단해야 해서 완전히 자동화하기는 애매했다. 그래서 데이터 조회와
+계산은 코드로 고정하고, "오늘 상황에서 무엇을 더 조사할지"는 에이전트가
+판단하게 만들었다 - 조용한 날은 짧게, 이상치가 있는 날은 그 지표에 맞는
+조사를 더 하도록.
 
-```
-bond_agent/
-  tools/
-    ecos.py      # 한국은행 ECOS: 기준금리, 국고채 3/5/10/30년, 회사채 AA-/BBB- 3년
-    fred.py      # FRED: DGS2, DGS10, SOFR
-    news.py      # get_market_events(한은 RSS), search_news(연합/한경 RSS 검색)
-    dart.py      # OpenDART: 회사채 증권신고서(채무증권) 목록 + 원문(수요예측 섹션)
-    _cache.py    # 로컬 파일 캐시 헬퍼
-  analytics/
-    curve.py     # 전일 대비 변동(bp), 스프레드, 이상치(z-score) 계산
-  config.py       # 경로, API 키, ECOS 통계표/항목 코드, LLM_BACKEND, ANTHROPIC_MODEL
-agent/
-  prompts.py       # 시스템 프롬프트 (역할/규칙/출력 형식, 6개 섹션)
-  llm_backend.py    # LLMBackend 인터페이스: MockLLMBackend / AnthropicLLMBackend
-  tools_schema.py   # Anthropic Messages API tool 정의(JSON Schema) + dispatch
-  loop.py           # tool-use 루프 (최대 10회 반복), logs/*.jsonl 기록
-  extract.py        # 증권신고서 원문 -> 수요예측 구조화 추출 (LLM, JSON Schema 강제 + 코드 검증)
-  verify.py         # 리포트의 %/bp 숫자를 툴 결과와 대조하는 검증 레이어
-scripts/
-  lookup_ecos_codes.py         # ECOS StatisticTableList/ItemList 조회 (코드 확인용)
-  demo_today.py                # 최근 영업일 기준 변동/스프레드/이상치 표 출력 (LLM 호출 없음)
-  run_briefing.py              # 에이전트 루프를 돌려 reports/YYYY-MM-DD.md 생성
-  review_bond_extractions.py   # 최근 공시 몇 건의 원문+추출결과를 나란히 출력 (DART_API_KEY 필요)
-tests/
-  test_ecos.py           # 실제 API 스모크 테스트
-  test_fred.py            # 실제 API 스모크 테스트
-  test_news.py             # 실제 RSS 스모크 테스트 (get_market_events, search_news)
-  test_dart.py             # dart.py 파싱/캐시 단위 테스트 (가짜 응답, API 키 불필요)
-  test_curve.py            # 가짜 데이터로 계산 로직 단위 테스트
-  test_tools_schema.py     # agent 툴 스키마/dispatch 단위 테스트 (모델 호출 없음)
-  test_loop.py             # MockLLMBackend로 tool-use 루프/로그/검증 흐름 전체 테스트
-  test_extract.py          # 구조화 추출 + 코드 검증(_validate) 단위 테스트 (MockLLMBackend)
-  test_verify.py           # 검증 레이어 단위 테스트 (모델 호출 없음)
-data/cache/       # API 응답 로컬 캐시 (날짜별 + dart/ 하위는 접수번호별 영구 캐시)
-logs/             # 에이전트 실행 로그 (YYYY-MM-DD.jsonl)
-reports/          # 생성된 모닝 브리핑 (YYYY-MM-DD.md)
+## 아키텍처
+
+```mermaid
+flowchart LR
+    subgraph tools["데이터 툴 (bond_agent/tools)"]
+        ECOS["ecos.py<br/>한국 국고채/회사채"]
+        FRED["fred.py<br/>미국 국채"]
+        NEWS["news.py<br/>뉴스 RSS"]
+        DART["dart.py<br/>회사채 공시 원문"]
+    end
+
+    subgraph calc["계산 레이어 (bond_agent/analytics)"]
+        CURVE["curve.py<br/>전일 대비 변동 · 스프레드 · z-score"]
+    end
+
+    subgraph agentloop["에이전트 루프 (agent/)"]
+        SCHEMA["tools_schema.py<br/>5개 tool 정의 + dispatch"]
+        EXTRACT["extract.py<br/>수요예측 구조화 추출(LLM)"]
+        LOOP["loop.py<br/>tool-use 루프 (최대 10회)"]
+        BACKEND["llm_backend.py<br/>Mock ↔ Anthropic 전환"]
+    end
+
+    VERIFY["verify.py<br/>%/bp 숫자를 툴 결과와 대조"]
+    REPORT["reports/YYYY-MM-DD.md"]
+    LOGS[("logs/YYYY-MM-DD.jsonl<br/>모든 호출/응답 기록")]
+
+    ECOS --> CURVE
+    FRED --> CURVE
+    CURVE --> SCHEMA
+    NEWS --> SCHEMA
+    DART --> EXTRACT --> SCHEMA
+    BACKEND <--> LOOP
+    SCHEMA --> LOOP
+    LOOP --> VERIFY --> REPORT
+    LOOP -.-> LOGS
 ```
 
-## 설치
+## 설계 포인트
+
+- **숫자는 코드, 해석은 LLM.** `curve.py`가 변동(bp)·스프레드·z-score를 전부
+  계산해서 넘기고, LLM은 그 값을 인용/서술만 한다. 프롬프트에도 "스스로
+  계산/추정하지 말 것"을 명시했지만, 실제로 미국 금리 변동을 스스로 계산해서
+  쓴 사례가 있었다 (아래 "실전 검증" 참고) - 프롬프트만으로는 완벽히 막을 수
+  없어서 검증 레이어가 필요했다.
+- **verify.py가 마지막 안전망.** 리포트 텍스트에서 %/bp 숫자를 정규식으로
+  뽑아 이번 실행에서 실제로 호출한 툴 결과(숫자형 필드는 물론, 뉴스 제목
+  같은 문자열 안에 박힌 숫자까지)와 대조한다. 불일치하면 리포트 하단에
+  경고 섹션을 붙인다 - 모델을 막지는 못해도, 사람이 검증 없이 그대로 믿고
+  넘어가는 걸 막는다.
+- **z-score 기반 조건부 추가 조사.** 필수 툴은 `get_market_snapshot`,
+  `get_anomalies` 둘뿐이다. `get_anomalies`가 |z|>2인 지표를 하나도 못 찾으면
+  뉴스 검색 없이 짧게 끝나고, 이상치가 있으면 그 지표 종류(국고채 커브 /
+  크레딧 스프레드 / 한미 금리차)에 맞는 검색어로 `search_news`를 호출한다.
+  자세한 비교는 [docs/agent_decision_comparison.md](docs/agent_decision_comparison.md).
+- **전 과정 로그.** 모든 tool_call/tool_result/model_response가
+  `logs/YYYY-MM-DD.jsonl`에 한 줄씩 남는다 - 에이전트가 어떤 순서로 어떤
+  판단을 했는지 나중에 그대로 재구성할 수 있다.
+
+## 에이전트 판단 과정 예시
+
+이상치가 있는 날(2026-09-11)과 없는 날(2026-09-21)에 실제로 다른 경로를
+타는지 실행해서 비교했다:
+
+| | 이상치 있는 날 | 이상치 없는 날 |
+|---|---|---|
+| 호출한 툴 | market_snapshot → anomalies → search_news×2(지표별 검색어) → bond_demand_forecasts | market_snapshot → anomalies → bond_demand_forecasts |
+| 턴 수 | 4 | 3 |
+| 리포트 | 이상치 3개 + 원인 후보 뉴스 포함, 길다 | "특이사항 없음" 한 줄, 짧다 |
+
+지표 종류에 따라 검색어도 실제로 달라졌다: 국고채 커브 이상치 →
+"국고채 금리", 크레딧 스프레드 이상치 → "회사채 크레딧 스프레드". 자세한
+내용과 실행 중 발견한 문제는 [docs/agent_decision_comparison.md](docs/agent_decision_comparison.md) 참고.
+
+## 실전 검증에서 잡은 버그
+
+전부 실제 API/실제 공시/실제 모델로 돌려보다가 발견해서 코드나 프롬프트로
+고친 것들이다 (가짜 데이터 단위 테스트로는 못 잡았을 종류의 문제들):
+
+| 문제 | 원인 | 해결 |
+|---|---|---|
+| DART 공시 목록에 회사채가 아닌 것들이 대량 섞여 나옴 | `pblntf_detail_ty=C002`가 증권사 ELS/DLS 발행실적보고서·투자설명서까지 포함 (56일치 2,736건) | 전체 페이지네이션 후 `report_nm`에 "증권신고서"가 실제로 있는 것만 필터링 |
+| 수요예측 결과 섹션 추출이 엉뚱한 곳을 집음 | "수요예측" 첫 등장 지점이 실제로는 정정사항 "목록"의 제목이었음 | "경쟁률" 등장 지점을 우선하고, 그중 "수요예측결과" 표제가 앞에 있는 것을 우선 (비교 발행내역 표의 "경쟁률"과 구분) |
+| 검증 레이어가 정상적으로 인용된 숫자를 오탐 | 뉴스 헤드라인의 숫자("5.44%")가 문자열 필드에 있어서, 숫자형 필드만 훑는 대조 로직이 못 찾음 | 문자열 값 안에 박힌 %/bp 숫자도 대조 대상에 포함 |
+| 모델이 미국 금리 변동을 스스로 계산해서 씀 | `get_us_yields`는 레벨만 주고 전일 대비 변동을 제공하는 툴이 없어서, 모델이 두 레벨을 직접 빼서 "-5bp"를 만들어냄 | 프롬프트에 "미국 금리는 레벨로만 언급, 변동폭 직접 계산 금지" 명시 |
+| 다중 회차 공시에서 모집금액이 10배 축소됨 | "이백일십억원(₩21,000,000,000)"을 210억이 아니라 21억으로 환산 | 프롬프트에 "괄호 안 원화 숫자를 1억으로 나눠서 환산" 규칙 추가 |
+| (선택 툴로 분류된) `get_bond_demand_forecasts`를 호출 안 하고 "최근 발행 없음"이라 근거 없이 씀 | 이상치가 없는 날 모델이 이 툴을 완전히 스킵 - 숫자가 아니라 verify.py도 못 잡는 환각 | 이 툴은 이상치 유무와 무관하게 섹션 6 작성 시 항상 호출하도록 재분류 |
+
+## 한계
+
+- **원문 섹션 탐지는 완벽한 파서가 아니라 휴리스틱이다.** 회사/공시 서식이
+  다양해서 새로운 형태의 공시에서 또 틀릴 수 있다.
+- **다중 회차 추출은 한 공시 안에서만 분리한다.** 서로 다른 공시에 걸쳐
+  같은 회사의 같은 채권이 여러 번 언급되는 경우(정정 → 발행조건확정)를
+  하나로 묶어주지는 않는다.
+- **한글 숫자/금액 환산은 여전히 모델이 읽는 것에 의존한다.** 이번에 한
+  가지 패턴(괄호 안 원화 숫자)의 오류는 고쳤지만, 다른 표기 방식에서 같은
+  종류의 오류가 또 날 수 있다 - 숫자는 항상 원문과 대조해야 한다.
+- **verify.py는 %/bp가 붙은 숫자만 검사한다.** z-score를 단위 없이 쓰거나,
+  "최근 발행 없음"처럼 숫자가 아닌 근거 없는 주장은 못 잡는다 (위 표의
+  마지막 항목처럼, 이런 건 프롬프트로 막아야 한다).
+- **뉴스 검색은 연합뉴스/한국경제 RSS 최근 항목에 한정.** 오래된 과거
+  날짜를 조회하면 그 시점 뉴스가 이미 피드에서 밀려나 빈 결과가 나올 수 있다.
+- **GitHub Actions 워크플로는 실제로 실행해보지 않았다.** 로컬에서 YAML
+  문법과 구조, 크론의 UTC↔KST 매핑만 검증했다 (원격 저장소가 없어서 실제
+  Actions 실행 자체는 못 함).
+
+## 설치 및 실행
 
 ```bash
 python -m pip install -r requirements.txt
-```
+cp .env.example .env   # ECOS_API_KEY, FRED_API_KEY, DART_API_KEY, ANTHROPIC_API_KEY 채우기
 
-## 환경 설정
-
-`.env.example`을 복사해서 `.env`를 만들고 키를 채운다.
-
-```bash
-cp .env.example .env
-```
-
-- `ECOS_API_KEY`: https://ecos.bok.or.kr 에서 발급
-- `FRED_API_KEY`: https://fred.stlouisfed.org/docs/api/api_key.html 에서 발급
-- `DART_API_KEY`: https://opendart.fss.or.kr 에서 발급 (회사채 수요예측 공시 조회용.
-  **아직 미발급** — 키가 없으면 `get_bond_demand_forecasts` 툴과
-  `scripts/review_bond_extractions.py`만 못 쓰고, 나머지는 정상 동작한다.)
-- `LLM_BACKEND`: `mock`(기본값, 비용 없음) 또는 `anthropic`(실제 호출, 비용 발생)
-- `ANTHROPIC_API_KEY`: https://console.anthropic.com 에서 발급.
-  `LLM_BACKEND=anthropic`일 때만 필요.
-- `ANTHROPIC_MODEL` (선택): 생략 시 `claude-sonnet-5` 사용
-
-## 사용한 ECOS 통계표/항목 코드
-
-`scripts/lookup_ecos_codes.py`로 직접 조회해서 확인한 값 (2026-09-24 기준,
-`bond_agent/config.py`의 `ECOS_SERIES_DEFS`에 근거 주석과 함께 정리되어 있음):
-
-| 시리즈 | 통계표 | 항목코드 | 이름 |
-|---|---|---|---|
-| base_rate | 722Y001 | 0101000 | 한국은행 기준금리 |
-| ktb_3y | 817Y002 | 010200000 | 국고채(3년) |
-| ktb_5y | 817Y002 | 010200001 | 국고채(5년) |
-| ktb_10y | 817Y002 | 010210000 | 국고채(10년) |
-| ktb_30y | 817Y002 | 010230000 | 국고채(30년) |
-| corp_aa_minus_3y | 817Y002 | 010300000 | 회사채(3년, AA-) |
-| corp_bbb_minus_3y | 817Y002 | 010320000 | 회사채(3년, BBB-) |
-
-기준금리(722Y001)와 나머지 시장금리(817Y002)는 서로 다른 통계표라는 점에 주의.
-기준금리는 발표 시차 때문에 시장금리보다 하루 늦게 갱신되는 날이 있을 수 있고,
-그런 날에는 해당 값이 `None`으로 반환된다 (과거 값을 대신 채우지 않음).
-
-## 뉴스 소스
-
-네이버 뉴스 검색 API는 키가 없어 바로 RSS로 전환했다 (전부 무키, 공개 RSS):
-
-- `get_market_events(date)`: 한국은행 보도자료(통화정책), 금융통화위원회 의결사항
-- `search_news(query, days)`: 연합뉴스 경제, 한국경제 (제목+요약만, 본문 전체는 가져오지 않음)
-
-## 회사채 수요예측 (DART)
-
-`bond_agent/tools/dart.py`가 OpenDART API로 회사채 증권신고서(채무증권) 및
-정정신고서를 찾고 원문을 받는다. **DART_API_KEY로 실제 공시를 조회해서 아래
-두 가지 문제를 발견하고 고쳤다:**
-
-- `list_bond_filings(start, end)`: `list.json`, `pblntf_detail_ty=C002`(증권신고-채무).
-  실제로 조회해보니 C002에는 일반 회사채 증권신고서뿐 아니라 증권사의 ELS/DLS
-  발행실적보고서·투자설명서도 함께 잡혀서(2026-08-01~09-25 기준 2,736건, 28페이지)
-  ① 전체 페이지를 페이지네이션으로 다 가져오고 ② `report_nm`에 "증권신고서"가
-  실제로 들어간 것만 남기도록 고쳤다 (정정신고서는 별도 코드가 없어 `report_nm`의
-  "정정"으로 판별).
-- `fetch_filing_text(rcept_no)`: `document.xml`로 원문 zip을 받아 텍스트로 풀고
-  수요예측 "결과" 섹션을 잘라낸다. 처음엔 "수요예측" 첫 등장 지점을 썼는데, 실제
-  공시(에스케이지오센트릭 [기재정정]증권신고서)로 확인해보니 그 지점이 정정사항
-  "목록"의 제목일 뿐 실제 경쟁률/참여금액 표가 아니었다. 그래서 지금은
-  ① "경쟁률" 등장 지점을 우선 쓰고 ② 그중에서도 "수요예측결과" 표제가 앞에
-  있는 것을 우선한다 (SK 증권신고서에서 "경쟁률"이 자기 회사 결과가 아니라
-  "동일등급 최근 발행내역" 비교표에도 나오는 걸 발견해서 추가한 안전장치).
-  이 지점들을 실제 대한전선/에스케이지오센트릭/SK 공시로 확인했다.
-  **그래도 완벽한 섹션 경계 탐지는 아닌 휴리스틱**이므로, 최종 확인은
-  `scripts/review_bond_extractions.py`로 원문과 추출 결과를 나란히 보고 해야 한다.
-
-`agent/extract.py`가 그 섹션을 LLM으로 구조화 추출한다 (발행사/신용등급/만기/
-모집금액/참여금액/경쟁률/공모희망금리밴드/확정 가산금리/증액여부/최종발행금액).
-`tool_choice`로 `record_bond_demand_extraction` 툴 호출을 강제해서 JSON Schema를
-지키게 하고, 원문에 없는 값은 null로 두도록 프롬프트에서 지시한다. 추출 후
-`_validate()`가 코드로 한 번 더 대조한다: 경쟁률 ≈ 참여금액/모집금액,
-확정 가산금리가 공모희망금리 밴드 안에 있는지. 불일치는 `_validation.flags`에 담긴다.
-
-알려진 한계: 한 공시에 2개 만기(예: 26-1회/26-2회)가 같이 나오면 추출 스키마가
-하나의 결과만 담을 수 있어서 모델이 둘 중 하나만 고르거나 뭉뚱그릴 수 있다
-(다중 회차 지원은 다음 단계).
-
-**현재 상태: DART_API_KEY로 목록 조회/원문 다운로드/섹션 추출까지는 실제 공시로
-검증했다.** 아직 ANTHROPIC_API_KEY가 없어서 `agent/extract.py`의 LLM 구조화
-추출 자체는 가짜 데이터(`tests/test_extract.py`)로만 검증했다 - 키가 생기면
-`scripts/review_bond_extractions.py`로 실제 공시 원문+추출 결과를 나란히 띄워서
-확인하면 된다.
-
-## Agent 레이어 (anthropic SDK 직접 구현, MockLLMBackend로 API 키 없이 테스트 가능)
-
-- `agent/tools_schema.py`가 정의한 5개 툴: `get_market_snapshot`, `get_anomalies`,
-  `get_us_yields`, `search_news`, `get_bond_demand_forecasts`
-- `agent/loop.py`가 `LLMBackend.create_message(..., tools=TOOLS)`를 호출하고,
-  응답이 `tool_use`면 `dispatch()`로 실행해서 `tool_result`로 돌려주는 것을
-  최대 10회까지 반복한다. 매 호출/결과를 `logs/YYYY-MM-DD.jsonl`에 기록.
-- 기본값(`LLM_BACKEND=mock`)에서는 `MockLLMBackend`가
-  get_market_snapshot → get_anomalies → search_news → 최종 텍스트 순서의
-  스크립트를 재생한다 (실제 ECOS/FRED/뉴스는 진짜로 호출됨). 시연용 최종
-  텍스트에는 일부러 틀린 숫자("국고10년 100.0%")를 심어 놨는데, 실제로
-  `scripts/run_briefing.py`를 돌리면 `agent/verify.py`가 이걸 잡아서 리포트
-  하단에 경고 섹션을 붙이는 것까지 확인했다.
-- 시스템 프롬프트(`agent/prompts.py`)는 get_market_snapshot/get_anomalies를
-  먼저 호출할 것, 이상치가 있으면 search_news로 원인 후보를 찾을 것(못 찾으면
-  "원인 불명확"), get_bond_demand_forecasts 검증 실패 항목은 "검증 필요"로
-  표시할 것, 숫자는 툴 결과만 인용할 것을 명시한다. 출력은 6개 섹션(한 줄
-  요약/금리 동향/스프레드/특이사항/체크포인트/크레딧 발행시장) 고정 형식.
-- `agent/verify.py`가 최종 리포트에서 %/bp 숫자를 정규식으로 뽑아 이번 실행의
-  툴 결과에 실제로 있었는지 대조하고, 불일치가 있으면 리포트 하단에 경고
-  섹션을 붙인다.
-
-## 실행
-
-```bash
-# 최근 영업일 기준 브리핑 데이터 표 출력 (숫자만, LLM 호출 없음, 비용 없음)
+# 숫자만 표로 확인 (LLM 호출 없음, 비용 없음)
 python scripts/demo_today.py
-python scripts/demo_today.py 2026-09-23   # 특정 날짜 지정
 
 # 에이전트 루프 실행 -> reports/YYYY-MM-DD.md 생성
-python scripts/run_briefing.py                  # LLM_BACKEND=mock(기본값): 비용 없음, 시연용
-python scripts/run_briefing.py 2026-09-23
-LLM_BACKEND=anthropic python scripts/run_briefing.py 2026-09-23   # 실제 모델 호출, 비용 발생
+python scripts/run_briefing.py                                    # LLM_BACKEND=mock(기본값), 비용 없음
+LLM_BACKEND=anthropic python scripts/run_briefing.py 2026-09-23    # 실제 모델 호출, 비용 발생
 
 # 최근 회사채 수요예측 공시 원문+추출결과 나란히 보기 (DART_API_KEY 필요)
 python scripts/review_bond_extractions.py
 
-# 테스트 (ECOS/FRED/뉴스 스모크 테스트는 .env에 키가 있어야 실행됨.
-# test_dart.py / test_tools_schema.py / test_loop.py / test_extract.py / test_verify.py
-# 는 모델·DART API를 호출하지 않아 비용 없음)
+# 테스트 (ECOS/FRED/뉴스 스모크 테스트는 .env 키 필요. 나머지는 Mock/가짜 데이터라 비용 없음)
 python -m pytest tests/ -v
 ```
 
-## 다음 단계
+`.env`의 `ECOS_API_KEY`/`FRED_API_KEY`/`DART_API_KEY`는 각각
+[ecos.bok.or.kr](https://ecos.bok.or.kr) · [FRED](https://fred.stlouisfed.org/docs/api/api_key.html) ·
+[opendart.fss.or.kr](https://opendart.fss.or.kr) 에서 무료로 발급받는다.
+`ANTHROPIC_API_KEY`는 [console.anthropic.com](https://console.anthropic.com)에서
+발급받고, `LLM_BACKEND=anthropic`일 때만 필요하다 (비용 발생).
 
-- ANTHROPIC_API_KEY로 `LLM_BACKEND=anthropic` 실제 실행 검증, 이후 최근 3영업일
-  리포트 생성 + 로그의 툴 호출 순서 요약
-- ANTHROPIC_API_KEY로 `scripts/review_bond_extractions.py` 실제 LLM 추출 검증
-  (dart.py의 목록조회/원문추출/섹션탐지는 이미 실제 공시로 검증 완료)
-- 여러 만기(회차)가 한 공시에 같이 나오는 경우 다중 결과 추출 지원
-- 뉴스 소스 확장 (필요하면 다른 매체/네이버 뉴스 검색 API 추가)
-- 모닝 코멘트를 특정 포맷(예: 슬랙, 이메일, 사내 문서)으로 발송하는 레이어
-- 스케줄러 연동 (매 영업일 아침 자동 실행)
+### 폴더 구조
+
+```
+bond_agent/
+  tools/         ecos.py, fred.py, news.py, dart.py, calendar.py, _cache.py
+  analytics/     curve.py (변동/스프레드/이상치 계산)
+  config.py      경로, API 키, ECOS 코드, LLM_BACKEND
+agent/
+  prompts.py, llm_backend.py, tools_schema.py, loop.py, extract.py, verify.py
+scripts/         demo_today.py, run_briefing.py, review_bond_extractions.py,
+                 check_business_day.py, lookup_ecos_codes.py, generate_extract_check.py
+tests/           각 모듈별 단위/스모크 테스트
+docs/            extract_check.md, agent_decision_comparison.md (검증 근거)
+.github/workflows/daily_briefing.yml   매 평일 07:30 KST 자동 실행
+data/cache/, logs/, reports/
+```
+
+## 로드맵
+
+앞으로의 확장 방향은 [ROADMAP.md](ROADMAP.md)에 정리했다.
