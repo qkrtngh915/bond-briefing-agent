@@ -1,8 +1,12 @@
 # 데일리 채권시장 브리핑 에이전트
 
+[![Daily Bond Briefing](https://github.com/qkrtngh915/bond-briefing-agent/actions/workflows/daily_briefing.yml/badge.svg)](https://github.com/qkrtngh915/bond-briefing-agent/actions/workflows/daily_briefing.yml)
+
 국내 자산운용사 채권운용본부용 모닝 브리핑을 매 영업일 아침 자동 생성하는
 에이전트. 숫자는 전부 코드로 계산하고, LLM은 "어떤 조사를 할지 판단"과
 "서술"만 담당한다.
+
+**최신 리포트**: [reports/2026-09-23.md](reports/2026-09-23.md) (GitHub Actions에서 실제로 생성)
 
 **샘플 리포트**: [이상치가 있던 날 (2026-09-11)](reports/2026-09-11.md) ·
 [조용한 날 (2026-09-21)](reports/2026-09-21.md) ·
