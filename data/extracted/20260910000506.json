@@ -1,0 +1,9 @@
+{
+  "rcept_no": "20260910000506",
+  "extract_prompt_version": "1",
+  "result": {
+    "issuer": "<UNKNOWN>",
+    "credit_rating": "A0",
+    "tranches": []
+  }
+}

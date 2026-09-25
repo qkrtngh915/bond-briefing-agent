@@ -164,5 +164,32 @@ verify.py의 숫자 불일치 검출 자체만 시연하는 독립된 테스트 
 6섹션 포맷과 맞출 필요가 없음 (tests/test_loop.py는 섹션 헤더가 아니라
 tool_call_order/검증 경고 문자열만 확인).
 
-## Phase 4~5
+## Phase 4 — 품질 평가
+
+`scripts/eval_report.py` 작성 (LLM 호출 없음, 리포트 텍스트 + `logs/{date}.jsonl`만
+읽어서 코드로 채점): 비교기준 없는 숫자 비율 / 섹션별 "운용 시사점" 누락 /
+근거 없는 인과 서술 개수 / verify.py 불일치 개수(로그의 마지막 `run_end`
+이벤트에서 읽음). `tests/test_eval_report.py` 11개로 검증.
+
+기존 reports/logs의 2026-09-11/09-21/09-23을 `docs/before_reports/`,
+`docs/before_logs/`에 백업(Before 스냅샷)한 뒤, `LLM_BACKEND=anthropic`으로
+같은 3개 날짜를 실제로 재생성(브리핑 실행 3회 - 이 작업의 6회 예산 중 3회
+사용, 나머지 0회는 추가로 쓰지 않음)해서 `reports/`/`logs/`를 덮어씀(After).
+
+채점기 자체의 버그/한계 2건을 실제 데이터로 발견해서 코드로 고침:
+1. "판단"/"추정"처럼 명시적 인과 접속사("때문"/"영향") 없이도 근거 없는
+   해석을 서술하는 패턴을 인과 마커에 추가.
+2. `annotate_with_warnings`가 붙이는 "## ⚠ 검증 경고" 섹션 자체의 문구가
+   인과 서술로 오탐되는 문제 - 채점 전에 그 섹션을 잘라내도록 수정.
+둘 다 회귀 테스트 추가(`test_evaluate_report_ignores_appended_verify_warning_section`
+등).
+
+`docs/quality_before_after.md`에 지표 비교표 + 크레딧 섹션 정성적
+before/after 발췌 + Phase 4에서 새로 발견된(아직 안 고친) 한계 3가지
+(프롬프트 서두 위반, 뉴스 근거 부분 과잉해석, 비교기준 100% 강제는 안 됨)를
+정직하게 기록. 결론: Phase 0이 지적한 4개 문제 중 3개(비교기준/크레딧
+피상성/국채수급 부재)는 정량적으로 개선됐고, 근거 없는 인과 서술은 완전히
+해결되지 않음(모델 자체 경향으로 보임, 추가 튜닝 필요 지점으로 남김).
+
+## Phase 5
 (진행 중 — 아래 섹션에 이어서 기록)
