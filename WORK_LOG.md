@@ -66,5 +66,42 @@
     값(각각 1,229,724.2 / 1,241,594.2 십억원, YoY +10.02% / +9.24%) 확인,
     ECOS ktb_3y 등 기존 시장금리 규모감과 정합적.
 
-## Phase 2-2, 2-3, Phase 3~5
+### 2-2 외국인 수급 — 둘 다 막혀서 스킵 (fallback 없음, 스펙대로)
+- 1차 후보 KRX 국채선물 투자자별 순매수: `data.krx.co.kr`가 최근
+  "Data Marketplace"로 개편되면서 데이터 조회 API 자체
+  (`comm/bldAttendant/getJsonData.cmd`)가 로그인 세션을 요구하도록
+  바뀐 것을 실제 요청으로 확인함. 브라우저 도구의 자체 에셋 차단
+  때문이 아니라(이번엔 Python requests로 직접 확인), 익명 세션 쿠키를
+  붙여도 `400 LOGOUT` 응답이 옴 — 투자자별 거래실적용 bld
+  (`dbms/MDC/STAT/standard/MDCSTAT02202`, 주식 기준으로 테스트)뿐
+  아니라 전종목시세용 bld(`dbms/MDC/STAT/standard/MDCSTAT12501`,
+  국채선물 코드 KRDRVFUBM3로 테스트)도 동일하게 `LOGOUT` 응답 —
+  즉 API 전체가 로그인 필요. 규칙상 "로그인 필요 데이터 금지"라서
+  중단.
+- 2차 후보 금투협(KOFIA) 채권정보센터 현물 순매수: `freesis.kofia.or.kr`
+  (자본시장통계, FreeSIS)의 채권 > 투자자별거래현황 메뉴를 확인함.
+  robots.txt는 없음(접근 자체는 문제 없음)이지만, 페이지가 "cleopatra"라는
+  독자 엔터프라이즈 JS 프레임워크(Nexacro/Xplatform 계열로 추정)로
+  렌더링되어 KAP 때처럼 raw JS를 읽어서 AJAX 엔드포인트를 특정하는 방식이
+  통하지 않음 — 페이지 전용 스크립트가 `.clx.js`라는 컴파일된 바이너리에
+  가까운 포맷이라 역공학이 사실상 불가능. `kofiabond.or.kr`는 Phase 1-1에서
+  이미 죽은 legacy frameset으로 확인됨.
+- **결론: 두 후보 모두 막혀서 fallback 없이 스킵함** (사용자 지침
+  "둘 다 막히면 fallback 없이 스킵하고 README 한계에 기록"을 그대로 따름).
+  `tools/flows.py`는 만들지 않음. README 한계 섹션(Phase 5)에 반드시
+  명시.
+
+### 2-3 국채선물 basis — 동일 원인으로 즉시 스킵
+KRX 파생상품 시세(국채선물) 데이터도 동일한 `getJsonData.cmd` API를
+쓰는데, 2-2 조사에서 이미 이 API 전체가 로그인 필요임을 실제로 확인했으므로
+(가격 조회용 bld로 재확인, 역시 `LOGOUT`), 1시간 타임박스를 다 쓰지 않고
+바로 스킵함 — 근본 원인이 이미 진단된 상태에서 추가 조사는 의미가 없다고
+판단. README 한계에 함께 기록.
+
+### Phase 2 종합 판단
+`bond_agent/config.py`의 `FOREIGN_FLOW_NEUTRAL_BAND` placeholder는 실제
+데이터가 없어 Phase 3-2에서 값을 채우거나 소비하는 코드를 추가하지 않음
+(죽은 설정값으로 남김, 필요 시 향후 데이터 소스 확보되면 사용).
+
+## Phase 3~5
 (진행 중 — 아래 섹션에 이어서 기록)
