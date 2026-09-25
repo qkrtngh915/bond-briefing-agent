@@ -16,15 +16,25 @@ def test_tools_have_expected_names_and_required_fields():
         "get_us_yields",
         "search_news",
         "get_bond_demand_forecasts",
+        "get_credit_snapshot",
+        "get_issuance_market_summary",
+        "get_ktb_supply",
     }
     assert by_name["get_market_snapshot"]["input_schema"]["required"] == ["date"]
     assert by_name["get_anomalies"]["input_schema"]["required"] == ["date"]
     assert by_name["get_us_yields"]["input_schema"]["required"] == ["start_date", "end_date"]
     assert by_name["search_news"]["input_schema"]["required"] == ["query"]
     assert by_name["get_bond_demand_forecasts"]["input_schema"]["required"] == ["date"]
-    # days는 선택 항목이어야 한다 (required에 없음).
+    assert by_name["get_credit_snapshot"]["input_schema"]["required"] == ["date"]
+    assert by_name["get_issuance_market_summary"]["input_schema"]["required"] == ["date"]
+    assert by_name["get_ktb_supply"]["input_schema"]["required"] == ["month"]
+    # days/window_business_days는 선택 항목이어야 한다 (required에 없음).
     assert "days" not in by_name["search_news"]["input_schema"]["required"]
     assert "days" not in by_name["get_bond_demand_forecasts"]["input_schema"]["required"]
+    assert (
+        "window_business_days"
+        not in by_name["get_issuance_market_summary"]["input_schema"]["required"]
+    )
 
 
 def test_dispatch_get_market_snapshot_merges_daily_changes_and_spreads(monkeypatch):
@@ -77,6 +87,47 @@ def test_dispatch_search_news_defaults_days_to_one(monkeypatch):
 
     dispatch("search_news", {"query": "기준금리", "days": 7})
     assert seen["days"] == 7
+
+
+def test_dispatch_get_credit_snapshot_uses_default_lookback(monkeypatch):
+    seen = {}
+
+    def fake(date, lookback_days):
+        seen["args"] = (date, lookback_days)
+        return {"as_of_date": date}
+
+    monkeypatch.setattr(tools_schema.credit_analytics, "calc_credit_context", fake)
+    result = dispatch("get_credit_snapshot", {"date": "2026-09-23"})
+    assert seen["args"] == ("2026-09-23", tools_schema._DEFAULT_CREDIT_LOOKBACK_DAYS)
+    assert result["as_of_date"] == "2026-09-23"
+
+
+def test_dispatch_get_issuance_market_summary_defaults_window(monkeypatch):
+    seen = {}
+
+    def fake(date, window_business_days):
+        seen["args"] = (date, window_business_days)
+        return {"as_of_date": date}
+
+    monkeypatch.setattr(tools_schema.issuance_analytics, "calc_issuance_summary", fake)
+    dispatch("get_issuance_market_summary", {"date": "2026-09-23"})
+    assert seen["args"] == ("2026-09-23", tools_schema._DEFAULT_ISSUANCE_WINDOW_BUSINESS_DAYS)
+
+    dispatch("get_issuance_market_summary", {"date": "2026-09-23", "window_business_days": 10})
+    assert seen["args"] == ("2026-09-23", 10)
+
+
+def test_dispatch_get_ktb_supply_calls_ecos_fallback(monkeypatch):
+    seen = {}
+
+    def fake(month):
+        seen["month"] = month
+        return {"month": month}
+
+    monkeypatch.setattr(tools_schema.ktb_supply, "get_issuance_plan", fake)
+    result = dispatch("get_ktb_supply", {"month": "2026-07"})
+    assert seen["month"] == "2026-07"
+    assert result["month"] == "2026-07"
 
 
 def test_dispatch_unknown_tool_raises():

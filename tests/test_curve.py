@@ -141,3 +141,34 @@ def test_flag_anomalies_zscore_matches_manual_pstdev(fake_dates):
     if metric["std_bp"] is not None:
         # curve.py는 z_score/std_bp를 소수 4자리로 반올림해서 반환하므로 tolerance를 맞춘다.
         assert metric["z_score"] == pytest.approx(metric["change_bp"] / metric["std_bp"], abs=1e-3)
+
+
+def test_classify_curve_label_seeded_jump_is_steepening(fake_dates):
+    # 마지막 날은 ktb_10y만 +50bp 튀고 ktb_3y는 평소처럼 거의 안 움직임
+    # -> 3-10 스프레드가 크게 벌어짐 -> 스티프닝. 단, ktb_3y 변동은 threshold(1bp) 아래라
+    # "불/베어" 방향 조건(둘 다 threshold 초과)을 만족 못해 "혼조" 취급 -> label은 "스티프닝".
+    date = fake_dates[-1]
+
+    result = curve.classify_curve_label(date)
+
+    assert result["as_of_date"] == date
+    assert result["spread_change_bp"] > curve.CURVE_LABEL_PARALLEL_THRESHOLD_BP
+    assert result["label"] == "스티프닝"
+
+
+def test_classify_curve_label_quiet_day_is_flat(fake_dates):
+    # 시드된 점프가 없는 평소 날짜는 3y/10y 둘 다 하루 0.1bp만 움직여 threshold(1bp) 아래
+    # -> 평행이동 + 혼조 -> "보합".
+    date = fake_dates[-2]
+
+    result = curve.classify_curve_label(date)
+
+    assert abs(result["spread_change_bp"]) <= curve.CURVE_LABEL_PARALLEL_THRESHOLD_BP
+    assert result["label"] == "보합"
+
+
+def test_classify_curve_label_invalid_date_raises():
+    # calc_daily_changes와 동일하게, ECOS 기준 한국 영업일이 아니거나 데이터가
+    # 없는 날짜는 ValueError를 그대로 전파한다 (None 라벨로 조용히 넘어가지 않음).
+    with pytest.raises(ValueError):
+        curve.classify_curve_label("1999-01-04")

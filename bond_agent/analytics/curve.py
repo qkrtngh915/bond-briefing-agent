@@ -18,6 +18,7 @@ import datetime as dt
 import statistics
 from typing import Optional
 
+from bond_agent.config import CURVE_LABEL_PARALLEL_THRESHOLD_BP
 from bond_agent.tools import ecos, fred
 
 KR_YIELD_KEYS = [
@@ -206,6 +207,77 @@ def calc_spreads(date: str) -> dict:
         "levels": levels,
         "levels_bp": levels_bp,
         "changes_bp": changes,
+    }
+
+
+def classify_curve_label(date: str) -> dict:
+    """국고 3년-10년 구간의 방향(불/베어/혼조) + 기울기(스티프닝/플래트닝) 라벨.
+
+    LLM이 매번 즉흥적으로 판단하지 않도록 코드로 라벨을 고정한다.
+    - change_short/change_long: ktb_3y/ktb_10y의 전일 대비 변동(bp) (calc_daily_changes 재사용).
+    - spread_change_bp = change_long - change_short. 이는 ktb_3_10(=10y-3y) 스프레드의
+      전일 대비 변동과 동일하다.
+    - |spread_change_bp| <= CURVE_LABEL_PARALLEL_THRESHOLD_BP 이면 "평행이동"(기울기 변화 없음)으로 본다.
+    - 두 만기 모두 threshold를 넘겨 같은 방향으로 움직이면 불(하락)/베어(상승), 아니면 "혼조".
+
+    Args:
+        date: 기준일 "YYYY-MM-DD".
+
+    Returns:
+        {
+          "as_of_date": date,
+          "change_short_bp": float|None,  # ktb_3y 전일 대비 (bp)
+          "change_long_bp": float|None,   # ktb_10y 전일 대비 (bp)
+          "spread_change_bp": float|None, # ktb_3_10 스프레드 전일 대비 (bp)
+          "threshold_bp": float,
+          "label": str|None,  # "불-스티프닝" / "불-플래트닝" / "베어-스티프닝" / "베어-플래트닝" / "혼조-스티프닝" / "혼조-플래트닝" / "평행이동" / "보합" / None
+        }
+    """
+    changes = calc_daily_changes(date)
+    change_short = changes["changes_bp"].get("ktb_3y")
+    change_long = changes["changes_bp"].get("ktb_10y")
+    threshold = CURVE_LABEL_PARALLEL_THRESHOLD_BP
+
+    if change_short is None or change_long is None:
+        return {
+            "as_of_date": date,
+            "change_short_bp": change_short,
+            "change_long_bp": change_long,
+            "spread_change_bp": None,
+            "threshold_bp": threshold,
+            "label": None,
+        }
+
+    spread_change_bp = round(change_long - change_short, 4)
+
+    if abs(spread_change_bp) <= threshold:
+        slope = "평행이동"
+    elif spread_change_bp > 0:
+        slope = "스티프닝"
+    else:
+        slope = "플래트닝"
+
+    if change_short < -threshold and change_long < -threshold:
+        direction = "불"
+    elif change_short > threshold and change_long > threshold:
+        direction = "베어"
+    else:
+        direction = "혼조"
+
+    if slope == "평행이동" and direction == "혼조":
+        label = "보합"
+    elif direction == "혼조":
+        label = slope
+    else:
+        label = f"{direction}-{slope}"
+
+    return {
+        "as_of_date": date,
+        "change_short_bp": change_short,
+        "change_long_bp": change_long,
+        "spread_change_bp": spread_change_bp,
+        "threshold_bp": threshold,
+        "label": label,
     }
 
 

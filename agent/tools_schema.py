@@ -11,8 +11,10 @@ from __future__ import annotations
 import datetime as dt
 from typing import Any
 
+from bond_agent.analytics import credit as credit_analytics
 from bond_agent.analytics import curve
-from bond_agent.tools import dart, fred, news
+from bond_agent.analytics import issuance as issuance_analytics
+from bond_agent.tools import dart, fred, ktb_supply, news
 
 TOOLS: list[dict[str, Any]] = [
     {
@@ -120,10 +122,75 @@ TOOLS: list[dict[str, Any]] = [
             "required": ["date"],
         },
     },
+    {
+        "name": "get_credit_snapshot",
+        "description": (
+            "등급/섹터별 회사채·금융채 시가평가 스프레드(국고 3년 대비, bp)의 레벨, "
+            "1일/1주/1개월 변동, 최근 약 3개월(60영업일) 기준 percentile, 20일 이동평균 "
+            "대비 위치, 등급간 스프레드(BBB- vs AA- 등) 확대/축소 여부, 섹터간 상대 스프레드 "
+            "(카드채/기타금융채 vs 공모회사채) 확대/축소 여부를 코드로 계산해 반환한다. "
+            "'크레딧' 섹션을 쓸 때는 항상 이 툴을 먼저 호출한다 - regime(타이트/중립/와이드), "
+            "direction(확대/축소/유지) 라벨은 이미 코드에서 정해진 것이므로 그대로 인용하고, "
+            "새로 판단하지 않는다. lookback은 1년(252영업일)이 이상적이지만 API 호출 시간 "
+            "때문에 실제로는 약 3개월(60영업일)로 계산되어 있다 - percentile을 인용할 때는 "
+            "'최근 약 3개월 기준'이라고 명시한다."
+        ),
+        "input_schema": {
+            "type": "object",
+            "properties": {
+                "date": {"type": "string", "description": "기준일 YYYY-MM-DD"},
+            },
+            "required": ["date"],
+        },
+    },
+    {
+        "name": "get_issuance_market_summary",
+        "description": (
+            "최근 N영업일(기본 20) 동안 캐시된 회사채 수요예측 추출 결과를 집계한다 "
+            "(LLM 호출 없음 - get_bond_demand_forecasts와 달리 새로 추출하지 않고 이미 "
+            "추출된 데이터만 씀). 건수, 총 공모금액/총 참여금액, 평균 경쟁률, 미매각(미달) "
+            "비율, 증액발행 비율, 등급별 분포, 그리고 이 수치들을 미리 정한 임계값으로 "
+            "판정한 '발행시장 온도'(강세/중립/약세) 라벨을 반환한다. '크레딧 발행시장' "
+            "섹션에서 개별 건별 나열 대신 전체 시장 분위기를 한 줄로 요약할 때 쓴다. "
+            "credit_rating이 '미확인'으로 잡히는 건이 많을 수 있다는 점(원문에 등급이 "
+            "명시 안 된 경우가 많음)을 감안해서 by_rating 분포는 참고용으로만 서술한다."
+        ),
+        "input_schema": {
+            "type": "object",
+            "properties": {
+                "date": {"type": "string", "description": "기준일 YYYY-MM-DD"},
+                "window_business_days": {
+                    "type": "integer",
+                    "description": "집계에 포함할 최근 영업일 수 (생략 시 20)",
+                },
+            },
+            "required": ["date"],
+        },
+    },
+    {
+        "name": "get_ktb_supply",
+        "description": (
+            "[국채수급 섹션에서 호출] 국고채권 월별 발행 실적과 전년 동월 대비 증감(YoY %)을 "
+            "ECOS(191Y001)에서 가져온다. 주의: 이 표는 월별 발행 '실적'만 제공하고 "
+            "발행'계획' 수치나 개별 입찰의 낙찰금리/응찰률은 없다 - 국고채 입찰 결과(낙찰금리, "
+            "응찰률, tail 등)는 이 데이터소스로 조회할 수 없으므로 절대 지어내지 말고, "
+            "'개별 입찰 상세는 확인 불가'라고 명시한다. 최근 1~2개월은 ECOS 발표 지연으로 "
+            "issuance_billion_won이 null일 수 있는데, 이는 정상이며 데이터 없음으로 서술한다."
+        ),
+        "input_schema": {
+            "type": "object",
+            "properties": {
+                "month": {"type": "string", "description": "조회할 월 YYYY-MM"},
+            },
+            "required": ["month"],
+        },
+    },
 ]
 
 
 _MAX_NEW_EXTRACTIONS_PER_CALL = 5
+_DEFAULT_CREDIT_LOOKBACK_DAYS = 60
+_DEFAULT_ISSUANCE_WINDOW_BUSINESS_DAYS = 20
 
 
 def get_bond_demand_forecasts(
@@ -214,4 +281,13 @@ def dispatch(name: str, tool_input: dict[str, Any], backend: Any = None) -> Any:
             raise RuntimeError("get_bond_demand_forecasts는 LLM backend가 필요합니다.")
         days = tool_input.get("days", 5)
         return get_bond_demand_forecasts(tool_input["date"], days, backend)
+    if name == "get_credit_snapshot":
+        return credit_analytics.calc_credit_context(
+            tool_input["date"], lookback_days=_DEFAULT_CREDIT_LOOKBACK_DAYS
+        )
+    if name == "get_issuance_market_summary":
+        window = tool_input.get("window_business_days", _DEFAULT_ISSUANCE_WINDOW_BUSINESS_DAYS)
+        return issuance_analytics.calc_issuance_summary(tool_input["date"], window)
+    if name == "get_ktb_supply":
+        return ktb_supply.get_issuance_plan(tool_input["month"])
     raise ValueError(f"알 수 없는 툴: {name}")

@@ -103,5 +103,39 @@ KRX 파생상품 시세(국채선물) 데이터도 동일한 `getJsonData.cmd` A
 데이터가 없어 Phase 3-2에서 값을 채우거나 소비하는 코드를 추가하지 않음
 (죽은 설정값으로 남김, 필요 시 향후 데이터 소스 확보되면 사용).
 
-## Phase 3~5
+## Phase 3 — 에이전트 툴 및 리포트 규격
+
+### 3-1 신규 툴
+`agent/tools_schema.py`에 `get_credit_snapshot`, `get_issuance_market_summary`,
+`get_ktb_supply` 3개 추가. `get_foreign_flows`는 Phase 2-2에서 데이터 소스가
+전부 막혀 구현 자체가 불가능하므로 **추가하지 않음** (스펙에 있던 4개 중 3개만
+구현, WORK_LOG에 사유 기록 — 위 Phase 2-2 참고).
+- `get_credit_snapshot(date)`: `analytics/credit.py: calc_credit_context`를
+  호출하되, lookback을 스펙의 1년(252영업일)이 아니라 **60영업일(약
+  3개월)로 고정**해서 호출함 — 252영업일 순차 호출은 브리핑 1회당 4분+
+  걸려 인터랙티브 에이전트 툴로 쓰기엔 너무 느림 (Phase 1-2에서 이미
+  검증된 값과 동일한 타협). 툴 설명에 "최근 약 3개월 기준"이라고 명시하도록
+  요구함.
+- `get_issuance_market_summary(date, window_business_days=20)`:
+  `analytics/issuance.py: calc_issuance_summary` 그대로 연결. LLM 호출 0회.
+- `get_ktb_supply(month)`: `tools/ktb_supply.py: get_issuance_plan` 그대로
+  연결. 툴 설명에 "개별 입찰 낙찰금리/응찰률은 조회 불가 - 지어내지 말 것"을
+  명시.
+
+### 3-2 코드 기반 해석 라벨
+`analytics/curve.py`에 `classify_curve_label(date)` 추가 — 국고 3-10년
+구간의 불/베어(방향) × 스티프닝/플래트닝(기울기) 라벨을
+`CURVE_LABEL_PARALLEL_THRESHOLD_BP`(1bp) 기준으로 코드에서 고정 판정.
+가짜 데이터 단위테스트 3개로 검증(시드된 50bp 점프 → "스티프닝", 평소
+날짜 → "보합", 잘못된 날짜 → calc_daily_changes와 동일하게 ValueError
+전파).
+
+크레딧 스프레드 regime(타이트/중립/와이드) 라벨은 이미 Phase 1-2
+`calc_credit_context`에 구현되어 있어 추가 작업 없음.
+
+외국인 수급 방향 분류기(`FOREIGN_FLOW_NEUTRAL_BAND` 소비)는 Phase 2-2에서
+데이터 소스가 없어 **만들지 않음** — config의 placeholder 값은 죽은 채로
+남겨둠.
+
+## Phase 3-3, Phase 4~5
 (진행 중 — 아래 섹션에 이어서 기록)
