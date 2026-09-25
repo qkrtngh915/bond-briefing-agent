@@ -1,0 +1,68 @@
+{
+  "rcept_no": "20260922000458",
+  "extract_prompt_version": "1",
+  "result": {
+    "issuer": "주)GS글로벌",
+    "credit_rating": "A0",
+    "tranches": [
+      {
+        "series_label": null,
+        "maturity": "2년",
+        "competition_ratio": null,
+        "coupon_guidance_band_bp": {
+          "low_bp": -30,
+          "high_bp": 30
+        },
+        "final_spread_bp": null,
+        "upsized": null,
+        "initial_offering_amount_raw": {
+          "value": null,
+          "unit": null
+        },
+        "initial_offering_amount_billion_won": null,
+        "demand_participation_amount_raw": {
+          "value": null,
+          "unit": null
+        },
+        "demand_participation_amount_billion_won": null,
+        "final_issue_amount_raw": {
+          "value": null,
+          "unit": null
+        },
+        "final_issue_amount_billion_won": null,
+        "_validation": {
+          "flags": []
+        }
+      },
+      {
+        "series_label": null,
+        "maturity": "3년",
+        "competition_ratio": null,
+        "coupon_guidance_band_bp": {
+          "low_bp": -30,
+          "high_bp": 30
+        },
+        "final_spread_bp": null,
+        "upsized": null,
+        "initial_offering_amount_raw": {
+          "value": null,
+          "unit": null
+        },
+        "initial_offering_amount_billion_won": null,
+        "demand_participation_amount_raw": {
+          "value": null,
+          "unit": null
+        },
+        "demand_participation_amount_billion_won": null,
+        "final_issue_amount_raw": {
+          "value": null,
+          "unit": null
+        },
+        "final_issue_amount_billion_won": null,
+        "_validation": {
+          "flags": []
+        }
+      }
+    ]
+  }
+}

@@ -1,0 +1,128 @@
+{
+  "rcept_no": "20260922000501",
+  "extract_prompt_version": "1",
+  "result": {
+    "issuer": "SK(주)",
+    "credit_rating": "AA+",
+    "tranches": [
+      {
+        "series_label": null,
+        "maturity": "3년",
+        "competition_ratio": 9.83,
+        "coupon_guidance_band_bp": {
+          "low_bp": -30,
+          "high_bp": 30
+        },
+        "final_spread_bp": -6,
+        "upsized": true,
+        "initial_offering_amount_raw": {
+          "value": 1200,
+          "unit": "억원"
+        },
+        "initial_offering_amount_billion_won": 1200.0,
+        "demand_participation_amount_raw": {
+          "value": 11800,
+          "unit": "억원"
+        },
+        "demand_participation_amount_billion_won": 11800.0,
+        "final_issue_amount_raw": {
+          "value": 1900,
+          "unit": "억원"
+        },
+        "final_issue_amount_billion_won": 1900.0,
+        "_validation": {
+          "flags": []
+        }
+      },
+      {
+        "series_label": null,
+        "maturity": "3년",
+        "competition_ratio": 7.4,
+        "coupon_guidance_band_bp": {
+          "low_bp": -30,
+          "high_bp": 30
+        },
+        "final_spread_bp": 0,
+        "upsized": true,
+        "initial_offering_amount_raw": {
+          "value": 1500,
+          "unit": "억원"
+        },
+        "initial_offering_amount_billion_won": 1500.0,
+        "demand_participation_amount_raw": {
+          "value": 11100,
+          "unit": "억원"
+        },
+        "demand_participation_amount_billion_won": 11100.0,
+        "final_issue_amount_raw": {
+          "value": 4400,
+          "unit": "억원"
+        },
+        "final_issue_amount_billion_won": 4400.0,
+        "_validation": {
+          "flags": [
+            "[(회차 미지정)] 최종발행금액/모집금액 비율 비정상: 2.93배 (최종발행금액=4400.0억, 모집금액=1500.0억) - 상식적 범위(0.5~2.5배) 밖"
+          ]
+        }
+      },
+      {
+        "series_label": null,
+        "maturity": "5년",
+        "competition_ratio": 11.33,
+        "coupon_guidance_band_bp": {
+          "low_bp": -30,
+          "high_bp": 30
+        },
+        "final_spread_bp": -3,
+        "upsized": true,
+        "initial_offering_amount_raw": {
+          "value": 300,
+          "unit": "억원"
+        },
+        "initial_offering_amount_billion_won": 300.0,
+        "demand_participation_amount_raw": {
+          "value": 3400,
+          "unit": "억원"
+        },
+        "demand_participation_amount_billion_won": 3400.0,
+        "final_issue_amount_raw": {
+          "value": 400,
+          "unit": "억원"
+        },
+        "final_issue_amount_billion_won": 400.0,
+        "_validation": {
+          "flags": []
+        }
+      },
+      {
+        "series_label": null,
+        "maturity": "5년",
+        "competition_ratio": 3.6,
+        "coupon_guidance_band_bp": {
+          "low_bp": -30,
+          "high_bp": 30
+        },
+        "final_spread_bp": 4,
+        "upsized": true,
+        "initial_offering_amount_raw": {
+          "value": 500,
+          "unit": "억원"
+        },
+        "initial_offering_amount_billion_won": 500.0,
+        "demand_participation_amount_raw": {
+          "value": 1800,
+          "unit": "억원"
+        },
+        "demand_participation_amount_billion_won": 1800.0,
+        "final_issue_amount_raw": {
+          "value": 600,
+          "unit": "억원"
+        },
+        "final_issue_amount_billion_won": 600.0,
+        "_validation": {
+          "flags": []
+        }
+      }
+    ]
+  }
+}

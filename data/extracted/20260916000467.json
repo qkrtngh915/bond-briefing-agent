@@ -1,0 +1,62 @@
+{
+  "rcept_no": "20260916000467",
+  "extract_prompt_version": "1",
+  "result": {
+    "issuer": "대한전선(주)",
+    "credit_rating": null,
+    "tranches": [
+      {
+        "series_label": "제155-1회",
+        "maturity": "2년",
+        "competition_ratio": 2.15,
+        "coupon_guidance_band_bp": {
+          "low_bp": -10,
+          "high_bp": 23
+        },
+        "final_spread_bp": 6,
+        "upsized": null,
+        "initial_offering_amount_raw": {
+          "value": 200,
+          "unit": "억원"
+        },
+        "initial_offering_amount_billion_won": 200.0,
+        "demand_participation_amount_raw": {
+          "value": 430,
+          "unit": "억원"
+        },
+        "demand_participation_amount_billion_won": 430.0,
+        "final_issue_amount_raw": null,
+        "final_issue_amount_billion_won": null,
+        "_validation": {
+          "flags": []
+        }
+      },
+      {
+        "series_label": "제155-2회",
+        "maturity": "3년",
+        "competition_ratio": 3.8,
+        "coupon_guidance_band_bp": {
+          "low_bp": -15,
+          "high_bp": 30
+        },
+        "final_spread_bp": 0,
+        "upsized": null,
+        "initial_offering_amount_raw": {
+          "value": 200,
+          "unit": "억원"
+        },
+        "initial_offering_amount_billion_won": 200.0,
+        "demand_participation_amount_raw": {
+          "value": 760,
+          "unit": "억원"
+        },
+        "demand_participation_amount_billion_won": 760.0,
+        "final_issue_amount_raw": null,
+        "final_issue_amount_billion_won": null,
+        "_validation": {
+          "flags": []
+        }
+      }
+    ]
+  }
+}

@@ -1,0 +1,39 @@
+{
+  "rcept_no": "20260916000304",
+  "extract_prompt_version": "1",
+  "result": {
+    "issuer": "(주)제주은행",
+    "credit_rating": null,
+    "tranches": [
+      {
+        "series_label": "제7회",
+        "maturity": null,
+        "competition_ratio": 1.41,
+        "coupon_guidance_band_bp": {
+          "low_bp": 520,
+          "high_bp": 590
+        },
+        "final_spread_bp": null,
+        "upsized": true,
+        "initial_offering_amount_raw": {
+          "value": 34000000000,
+          "unit": "원"
+        },
+        "initial_offering_amount_billion_won": 340.0,
+        "demand_participation_amount_raw": {
+          "value": 480,
+          "unit": "억원"
+        },
+        "demand_participation_amount_billion_won": 480.0,
+        "final_issue_amount_raw": {
+          "value": 480,
+          "unit": "억원"
+        },
+        "final_issue_amount_billion_won": 480.0,
+        "_validation": {
+          "flags": []
+        }
+      }
+    ]
+  }
+}

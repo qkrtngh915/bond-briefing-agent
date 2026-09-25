@@ -66,3 +66,33 @@ ECOS_SERIES_DEFS: dict[str, tuple[str, str, str]] = {
     "corp_aa_minus_3y": ("817Y002", "010300000", "회사채(3년, AA-)"),
     "corp_bbb_minus_3y": ("817Y002", "010320000", "회사채(3년, BBB-)"),
 }
+
+# ---------------------------------------------------------------------------
+# 코드 기반 해석 라벨 임계값 (LLM이 아니라 analytics/*.py가 이 값으로 라벨을
+# 산출한다 - "리포트 품질 개선" 작업에서 도입).
+# ---------------------------------------------------------------------------
+
+# analytics/credit.py: 등급간/섹터간 스프레드 변화가 이 값(bp) 이내면 "유지"로 본다.
+CREDIT_GAP_DIRECTION_THRESHOLD_BP = 0.5
+
+# analytics/credit.py: 스프레드의 1년(lookback) 분위수가 이 값 이하/이상이면 타이트/와이드.
+CREDIT_SPREAD_REGIME_TIGHT_PERCENTILE = 20.0
+CREDIT_SPREAD_REGIME_WIDE_PERCENTILE = 80.0
+
+# analytics/curve.py: 커브 라벨(bull/bear steepening/flattening) 판단 임계값(bp).
+# 두 지표(예: 국고3년, 국고10년) 변동의 차이가 이보다 작으면 "평행이동"으로 본다.
+CURVE_LABEL_PARALLEL_THRESHOLD_BP = 1.0
+
+# analytics/flows.py(외국인 수급): 5일 누적 순매수가 이 값을 넘으면 매수/매도 우위,
+# 그 사이면 중립. 단위는 데이터 소스의 원단위(계약수 또는 억원)를 그대로 쓴다 -
+# 실제 구현 시 Phase 2에서 확정.
+FOREIGN_FLOW_NEUTRAL_BAND = 0  # placeholder - Phase 2에서 실제 데이터 확보 후 조정
+
+# analytics/issuance.py: "발행시장 온도" 규칙 기반 판정.
+# 강세: 언더발행 비중 >= HOT_UNDER_PCT 이고 평균 경쟁률 >= HOT_RATIO.
+# 약세: 언더발행 비중 <= COLD_UNDER_PCT 이고 평균 경쟁률 <= COLD_RATIO.
+# 그 외는 중립.
+ISSUANCE_TEMPERATURE_HOT_UNDER_PCT = 50.0
+ISSUANCE_TEMPERATURE_HOT_RATIO = 3.0
+ISSUANCE_TEMPERATURE_COLD_UNDER_PCT = 10.0
+ISSUANCE_TEMPERATURE_COLD_RATIO = 1.5

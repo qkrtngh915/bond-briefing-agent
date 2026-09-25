@@ -1,0 +1,62 @@
+{
+  "rcept_no": "20260921000241",
+  "extract_prompt_version": "1",
+  "result": {
+    "issuer": "에스케이지오센트릭(주)",
+    "credit_rating": null,
+    "tranches": [
+      {
+        "series_label": "제26-1회",
+        "maturity": "2년",
+        "competition_ratio": 1.63,
+        "coupon_guidance_band_bp": {
+          "low_bp": -40,
+          "high_bp": 40
+        },
+        "final_spread_bp": 38,
+        "upsized": true,
+        "initial_offering_amount_raw": {
+          "value": 400,
+          "unit": "억원"
+        },
+        "initial_offering_amount_billion_won": 400.0,
+        "demand_participation_amount_raw": {
+          "value": 650,
+          "unit": "억원"
+        },
+        "demand_participation_amount_billion_won": 650.0,
+        "final_issue_amount_raw": null,
+        "final_issue_amount_billion_won": null,
+        "_validation": {
+          "flags": []
+        }
+      },
+      {
+        "series_label": "제26-2회",
+        "maturity": "3년",
+        "competition_ratio": 2.5,
+        "coupon_guidance_band_bp": {
+          "low_bp": -60,
+          "high_bp": 60
+        },
+        "final_spread_bp": 55,
+        "upsized": true,
+        "initial_offering_amount_raw": {
+          "value": 300,
+          "unit": "억원"
+        },
+        "initial_offering_amount_billion_won": 300.0,
+        "demand_participation_amount_raw": {
+          "value": 750,
+          "unit": "억원"
+        },
+        "demand_participation_amount_billion_won": 750.0,
+        "final_issue_amount_raw": null,
+        "final_issue_amount_billion_won": null,
+        "_validation": {
+          "flags": []
+        }
+      }
+    ]
+  }
+}

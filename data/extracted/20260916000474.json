@@ -1,0 +1,68 @@
+{
+  "rcept_no": "20260916000474",
+  "extract_prompt_version": "1",
+  "result": {
+    "issuer": "에스케이위탁관리부동산투자회사㈜",
+    "credit_rating": null,
+    "tranches": [
+      {
+        "series_label": "제8-1회",
+        "maturity": "1년",
+        "competition_ratio": 4.25,
+        "coupon_guidance_band_bp": {
+          "low_bp": null,
+          "high_bp": null
+        },
+        "final_spread_bp": null,
+        "upsized": null,
+        "initial_offering_amount_raw": {
+          "value": null,
+          "unit": null
+        },
+        "initial_offering_amount_billion_won": null,
+        "demand_participation_amount_raw": {
+          "value": 1700,
+          "unit": "억원"
+        },
+        "demand_participation_amount_billion_won": 1700.0,
+        "final_issue_amount_raw": {
+          "value": null,
+          "unit": null
+        },
+        "final_issue_amount_billion_won": null,
+        "_validation": {
+          "flags": []
+        }
+      },
+      {
+        "series_label": "제8-2회",
+        "maturity": "2년",
+        "competition_ratio": 3.25,
+        "coupon_guidance_band_bp": {
+          "low_bp": null,
+          "high_bp": null
+        },
+        "final_spread_bp": null,
+        "upsized": null,
+        "initial_offering_amount_raw": {
+          "value": null,
+          "unit": null
+        },
+        "initial_offering_amount_billion_won": null,
+        "demand_participation_amount_raw": {
+          "value": 1950,
+          "unit": "억원"
+        },
+        "demand_participation_amount_billion_won": 1950.0,
+        "final_issue_amount_raw": {
+          "value": null,
+          "unit": null
+        },
+        "final_issue_amount_billion_won": null,
+        "_validation": {
+          "flags": []
+        }
+      }
+    ]
+  }
+}
