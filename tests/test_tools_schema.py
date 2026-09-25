@@ -40,11 +40,13 @@ def test_tools_have_expected_names_and_required_fields():
 def test_dispatch_get_market_snapshot_merges_daily_changes_and_spreads(monkeypatch):
     monkeypatch.setattr(tools_schema.curve, "calc_daily_changes", lambda date: {"as_of_date": date, "kind": "changes"})
     monkeypatch.setattr(tools_schema.curve, "calc_spreads", lambda date: {"as_of_date": date, "kind": "spreads"})
+    monkeypatch.setattr(tools_schema.curve, "classify_curve_label", lambda date: {"as_of_date": date, "label": "보합"})
 
     result = dispatch("get_market_snapshot", {"date": "2026-09-23"})
 
     assert result["daily_changes"]["kind"] == "changes"
     assert result["spreads"]["kind"] == "spreads"
+    assert result["curve_label"]["label"] == "보합"
 
 
 def test_dispatch_get_anomalies_calls_flag_anomalies(monkeypatch):

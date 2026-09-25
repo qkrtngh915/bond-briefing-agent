@@ -21,10 +21,12 @@ TOOLS: list[dict[str, Any]] = [
         "name": "get_market_snapshot",
         "description": (
             "지정한 한국 영업일의 채권시장 스냅샷을 반환한다. 국고채(기준금리, 3/5/10/30년) "
-            "및 회사채(AA-/BBB- 3년)의 레벨과 전일 대비 변동(bp), 그리고 국고 3/10·10/30 "
-            "커브 스프레드, 크레딧 스프레드(AA-/BBB-, 국고3년 대비), 한미 10년 금리차의 "
-            "레벨(bp)과 전일 대비 변동(bp)을 모두 포함한다. 모닝 브리핑 작성 시 가장 먼저 "
-            "호출해야 하는 툴이다."
+            "및 회사채(AA-/BBB- 3년)의 레벨과 전일 대비 변동(bp), 국고 3/10·10/30 커브 "
+            "스프레드, 크레딧 스프레드(AA-/BBB-, 국고3년 대비), 한미 10년 금리차의 "
+            "레벨(bp)과 전일 대비 변동(bp), 그리고 국고 3-10년 구간의 방향×기울기 라벨"
+            "(curve_label - 불/베어/혼조 × 스티프닝/플래트닝/평행이동, 이미 코드로 판정된 "
+            "값이므로 그대로 인용)을 모두 포함한다. 모닝 브리핑 작성 시 가장 먼저 호출해야 "
+            "하는 툴이다."
         ),
         "input_schema": {
             "type": "object",
@@ -268,6 +270,7 @@ def dispatch(name: str, tool_input: dict[str, Any], backend: Any = None) -> Any:
         return {
             "daily_changes": curve.calc_daily_changes(date),
             "spreads": curve.calc_spreads(date),
+            "curve_label": curve.classify_curve_label(date),
         }
     if name == "get_anomalies":
         return curve.flag_anomalies(tool_input["date"])

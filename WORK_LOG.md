@@ -137,5 +137,32 @@ KRX 파생상품 시세(국채선물) 데이터도 동일한 `getJsonData.cmd` A
 데이터 소스가 없어 **만들지 않음** — config의 placeholder 값은 죽은 채로
 남겨둠.
 
-## Phase 3-3, Phase 4~5
+### 3-3 시스템 프롬프트 개편
+`agent/prompts.py`의 `SYSTEM_PROMPT`를 전면 재작성:
+- 섹션 순서를 스펙대로 1 한줄요약+커브라벨 / 2 금리동향 / 3 국채수급 /
+  4 크레딧 / 5 특이사항 / 6 체크포인트로 변경 (크레딧이 6번에서 4번으로
+  이동, 국채수급이 신규 3번으로 삽입).
+- "모든 숫자에 비교 기준(전일/전주/percentile 중 최소 1개) 필수" 규칙과
+  각 섹션 끝 "운용 시사점"(매매 추천 아님, 관찰 포인트) 규칙을 명시적으로
+  추가.
+- 근거 없는 인과 서술 금지 규칙을 "수급/뉴스상 뚜렷한 원인 확인 안 됨"이라는
+  고정 문구로 통일 (get_bond_demand_forecasts/get_ktb_supply에서 실제 근거가
+  나온 경우만 예외).
+- 라벨(curve_label/regime/direction/temperature)은 코드가 준 값을 그대로
+  인용하고 LLM이 재판정하지 말라는 규칙 추가.
+- 국채수급 섹션에는 "외국인 수급 데이터 소스 없음"을 명시적으로 쓰도록
+  지시 (Phase 2-2 스킵 결정을 리포트 차원에서도 정직하게 드러내기 위함).
+- 자리표시자 숫자(X.XX% 등, 실제 값처럼 안 보이게)로 된 좋음/나쁨 예시
+  문장 6쌍 추가.
+- `get_market_snapshot`의 dispatch 결과에 `curve_label`(Phase 3-2의
+  `classify_curve_label`) 필드를 추가해서, 에이전트가 별도 툴 호출 없이
+  스냅샷 하나로 한줄요약용 커브 라벨까지 받게 함.
+
+`agent/llm_backend.py`의 `build_demo_mock_script`(verify.py 데모용 mock
+스크립트, 5섹션 구 포맷)는 그대로 둠 — SYSTEM_PROMPT를 참조하지 않고
+verify.py의 숫자 불일치 검출 자체만 시연하는 독립된 테스트 픽스처라 새
+6섹션 포맷과 맞출 필요가 없음 (tests/test_loop.py는 섹션 헤더가 아니라
+tool_call_order/검증 경고 문자열만 확인).
+
+## Phase 4~5
 (진행 중 — 아래 섹션에 이어서 기록)
