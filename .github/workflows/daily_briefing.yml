@@ -7,10 +7,27 @@ name: Daily Bond Briefing
 "on":
   schedule:
     - cron: "30 22 * * 0-4"
-  workflow_dispatch: {}
+  workflow_dispatch:
+    inputs:
+      date:
+        description: "브리핑 기준일 YYYY-MM-DD (비우면 오늘(KST))"
+        required: false
+        type: string
+      force:
+        description: "공휴일/주말이어도 강제로 실행"
+        required: false
+        type: boolean
+        default: false
 
 permissions:
   contents: write
+
+# 같은 워크플로가 동시에 두 번 돌면 reports/logs/data 커밋이 충돌할 수 있어서,
+# 같은 그룹은 순차 실행되도록 한다 (겹치면 뒤에 트리거된 걸 취소하지 않고
+# 대기시킴 - 매일 자동 실행과 수동 실행이 겹치는 드문 경우를 대비).
+concurrency:
+  group: daily-bond-briefing
+  cancel-in-progress: false
 
 jobs:
   briefing:
@@ -27,14 +44,28 @@ jobs:
       - name: Install dependencies
         run: python -m pip install -r requirements.txt
 
-      - name: Check if today (KST) is a Korean business day
+      - name: Resolve target date (KST)
+        id: resolve_date
+        run: |
+          if [ -n "${{ inputs.date }}" ]; then
+            echo "date=${{ inputs.date }}" >> "$GITHUB_OUTPUT"
+          else
+            echo "date=$(TZ=Asia/Seoul date +%F)" >> "$GITHUB_OUTPUT"
+          fi
+
+      - name: Check if target date (KST) is a Korean business day
         id: check_day
-        run: python scripts/check_business_day.py
+        run: |
+          if [ "${{ inputs.force }}" = "true" ]; then
+            python scripts/check_business_day.py "${{ steps.resolve_date.outputs.date }}" --force
+          else
+            python scripts/check_business_day.py "${{ steps.resolve_date.outputs.date }}"
+          fi
         continue-on-error: true
 
       - name: Skip (weekend or KR holiday)
         if: steps.check_day.outcome == 'failure'
-        run: echo "한국 영업일이 아니므로 오늘은 브리핑을 건너뜁니다."
+        run: echo "한국 영업일이 아니므로 오늘은 브리핑을 건너뜁니다. (force=true로 workflow_dispatch를 수동 실행하면 강제로 돌릴 수 있음)"
 
       - name: Run daily briefing
         if: steps.check_day.outcome == 'success'
@@ -44,8 +75,10 @@ jobs:
           DART_API_KEY: ${{ secrets.DART_API_KEY }}
           ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
           LLM_BACKEND: anthropic
-          ANTHROPIC_MODEL: ${{ vars.ANTHROPIC_MODEL }}
-        run: python scripts/run_briefing.py
+          # repository variable ANTHROPIC_MODEL이 설정돼 있으면 그걸 쓰고,
+          # 없으면 Haiku로 고정 (실수로 더 비싼 모델을 쓰게 되는 걸 방지).
+          ANTHROPIC_MODEL: ${{ vars.ANTHROPIC_MODEL || 'claude-haiku-4-5-20251001' }}
+        run: python scripts/run_briefing.py "${{ steps.resolve_date.outputs.date }}"
 
       - name: Commit and push generated report/log/extraction cache
         if: steps.check_day.outcome == 'success'
@@ -60,6 +93,6 @@ jobs:
           if git diff --cached --quiet; then
             echo "새로 생성된 리포트/로그/캐시가 없습니다."
           else
-            git commit -m "Daily briefing $(date -u +%F)"
+            git commit -m "Daily briefing ${{ steps.resolve_date.outputs.date }}"
             git push
           fi

@@ -13,9 +13,16 @@ from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
 
+from agent.extract import EXTRACTED_CACHE_DIR
 from agent.loop import run_agent_loop
 from bond_agent.config import REPORTS_DIR
 from bond_agent.tools import ecos
+
+
+def _extracted_cache_file_count() -> int:
+    if not EXTRACTED_CACHE_DIR.exists():
+        return 0
+    return len(list(EXTRACTED_CACHE_DIR.glob("*.json")))
 
 
 def _latest_kr_business_date() -> str:
@@ -33,7 +40,10 @@ def main() -> None:
     date = sys.argv[1] if len(sys.argv) > 1 else _latest_kr_business_date()
 
     print(f"[{date}] 브리핑 생성 중...")
+    extracted_before = _extracted_cache_file_count()
     result = run_agent_loop(date)
+    extracted_after = _extracted_cache_file_count()
+    new_extractions = extracted_after - extracted_before
 
     REPORTS_DIR.mkdir(parents=True, exist_ok=True)
     out_path = REPORTS_DIR / f"{date}.md"
@@ -41,7 +51,10 @@ def main() -> None:
 
     print(f"저장: {out_path}")
     print(f"툴 호출 순서: {' -> '.join(result['tool_call_order'])}")
-    print(f"턴 수: {result['num_turns']}")
+    print(f"턴 수(메인 루프 API 호출 수): {result['num_turns']}")
+    print(f"신규 DART 수요예측 추출 건수(추가 API 호출): {new_extractions}")
+    total_api_calls = result["num_turns"] + new_extractions
+    print(f"이번 실행 총 API 호출 수(메인 루프 + DART 추출): {total_api_calls}")
     if result["verification_mismatches"]:
         print(f"검증 경고 {len(result['verification_mismatches'])}건 발견: {result['verification_mismatches']}")
 
