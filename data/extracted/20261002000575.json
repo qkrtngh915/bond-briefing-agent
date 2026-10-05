@@ -1,0 +1,62 @@
+{
+  "rcept_no": "20261002000575",
+  "extract_prompt_version": "1",
+  "result": {
+    "issuer": "현대트랜시스(주)",
+    "credit_rating": null,
+    "tranches": [
+      {
+        "series_label": "51-1",
+        "maturity": "2년",
+        "competition_ratio": 6.67,
+        "coupon_guidance_band_bp": {
+          "low_bp": null,
+          "high_bp": null
+        },
+        "final_spread_bp": null,
+        "upsized": null,
+        "initial_offering_amount_raw": {
+          "value": 600,
+          "unit": "억원"
+        },
+        "initial_offering_amount_billion_won": 600.0,
+        "demand_participation_amount_raw": {
+          "value": 4000,
+          "unit": "억원"
+        },
+        "demand_participation_amount_billion_won": 4000.0,
+        "final_issue_amount_raw": null,
+        "final_issue_amount_billion_won": null,
+        "_validation": {
+          "flags": []
+        }
+      },
+      {
+        "series_label": "51-2",
+        "maturity": "3년",
+        "competition_ratio": 3.89,
+        "coupon_guidance_band_bp": {
+          "low_bp": null,
+          "high_bp": null
+        },
+        "final_spread_bp": null,
+        "upsized": null,
+        "initial_offering_amount_raw": {
+          "value": 900,
+          "unit": "억원"
+        },
+        "initial_offering_amount_billion_won": 900.0,
+        "demand_participation_amount_raw": {
+          "value": 3500,
+          "unit": "억원"
+        },
+        "demand_participation_amount_billion_won": 3500.0,
+        "final_issue_amount_raw": null,
+        "final_issue_amount_billion_won": null,
+        "_validation": {
+          "flags": []
+        }
+      }
+    ]
+  }
+}
