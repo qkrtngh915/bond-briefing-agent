@@ -1,0 +1,64 @@
+{
+  "rcept_no": "20261012000412",
+  "extract_prompt_version": "1",
+  "result": {
+    "issuer": "롯데위탁관리부동산투자회사㈜",
+    "credit_rating": "AA-",
+    "tranches": [
+      {
+        "series_label": "제10-1회",
+        "maturity": "1년",
+        "competition_ratio": 1.6,
+        "coupon_guidance_band_bp": {
+          "low_bp": 30,
+          "high_bp": 40
+        },
+        "final_spread_bp": null,
+        "upsized": null,
+        "initial_offering_amount_raw": {
+          "value": 800,
+          "unit": "억원"
+        },
+        "initial_offering_amount_billion_won": 800.0,
+        "demand_participation_amount_raw": {
+          "value": 800,
+          "unit": "억원"
+        },
+        "demand_participation_amount_billion_won": 800.0,
+        "final_issue_amount_raw": null,
+        "final_issue_amount_billion_won": null,
+        "_validation": {
+          "flags": [
+            "[제10-1회] 경쟁률 불일치: 명시된 경쟁률=1.6, 참여금액/모집금액=1.00 (참여금액=800.0억, 모집금액=800.0억)"
+          ]
+        }
+      },
+      {
+        "series_label": "제10-2회",
+        "maturity": "2년",
+        "competition_ratio": 1.0,
+        "coupon_guidance_band_bp": {
+          "low_bp": 15,
+          "high_bp": 36
+        },
+        "final_spread_bp": null,
+        "upsized": null,
+        "initial_offering_amount_raw": {
+          "value": 750,
+          "unit": "억원"
+        },
+        "initial_offering_amount_billion_won": 750.0,
+        "demand_participation_amount_raw": {
+          "value": 750,
+          "unit": "억원"
+        },
+        "demand_participation_amount_billion_won": 750.0,
+        "final_issue_amount_raw": null,
+        "final_issue_amount_billion_won": null,
+        "_validation": {
+          "flags": []
+        }
+      }
+    ]
+  }
+}

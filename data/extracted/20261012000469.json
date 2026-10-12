@@ -1,0 +1,30 @@
+{
+  "rcept_no": "20261012000469",
+  "extract_prompt_version": "1",
+  "result": {
+    "issuer": "고려아연(주)",
+    "credit_rating": null,
+    "tranches": [
+      {
+        "series_label": "제14회",
+        "maturity": "5년",
+        "competition_ratio": null,
+        "coupon_guidance_band_bp": null,
+        "final_spread_bp": null,
+        "upsized": null,
+        "initial_offering_amount_raw": {
+          "value": 300000000000,
+          "unit": "원"
+        },
+        "initial_offering_amount_billion_won": 3000.0,
+        "demand_participation_amount_raw": null,
+        "demand_participation_amount_billion_won": null,
+        "final_issue_amount_raw": null,
+        "final_issue_amount_billion_won": null,
+        "_validation": {
+          "flags": []
+        }
+      }
+    ]
+  }
+}
