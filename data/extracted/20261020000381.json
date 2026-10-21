@@ -1,0 +1,56 @@
+{
+  "rcept_no": "20261020000381",
+  "extract_prompt_version": "1",
+  "result": {
+    "issuer": "엘에스증권(주)",
+    "credit_rating": null,
+    "tranches": [
+      {
+        "series_label": "제1-1회",
+        "maturity": "1년 6개월",
+        "competition_ratio": null,
+        "coupon_guidance_band_bp": null,
+        "final_spread_bp": null,
+        "upsized": null,
+        "initial_offering_amount_raw": {
+          "value": 72000000000,
+          "unit": "원"
+        },
+        "initial_offering_amount_billion_won": 720.0,
+        "demand_participation_amount_raw": null,
+        "demand_participation_amount_billion_won": null,
+        "final_issue_amount_raw": {
+          "value": 72000000000,
+          "unit": "원"
+        },
+        "final_issue_amount_billion_won": 720.0,
+        "_validation": {
+          "flags": []
+        }
+      },
+      {
+        "series_label": "제1-2회",
+        "maturity": "2년",
+        "competition_ratio": null,
+        "coupon_guidance_band_bp": null,
+        "final_spread_bp": null,
+        "upsized": null,
+        "initial_offering_amount_raw": {
+          "value": 61000000000,
+          "unit": "원"
+        },
+        "initial_offering_amount_billion_won": 610.0,
+        "demand_participation_amount_raw": null,
+        "demand_participation_amount_billion_won": null,
+        "final_issue_amount_raw": {
+          "value": 61000000000,
+          "unit": "원"
+        },
+        "final_issue_amount_billion_won": 610.0,
+        "_validation": {
+          "flags": []
+        }
+      }
+    ]
+  }
+}

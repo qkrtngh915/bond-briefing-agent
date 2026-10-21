@@ -1,0 +1,50 @@
+{
+  "rcept_no": "20261020000385",
+  "extract_prompt_version": "1",
+  "result": {
+    "issuer": "(주)LG유플러스",
+    "credit_rating": null,
+    "tranches": [
+      {
+        "series_label": "제121-1회",
+        "maturity": "2년",
+        "competition_ratio": null,
+        "coupon_guidance_band_bp": null,
+        "final_spread_bp": null,
+        "upsized": null,
+        "initial_offering_amount_raw": {
+          "value": 110000000000,
+          "unit": "원"
+        },
+        "initial_offering_amount_billion_won": 1100.0,
+        "demand_participation_amount_raw": null,
+        "demand_participation_amount_billion_won": null,
+        "final_issue_amount_raw": null,
+        "final_issue_amount_billion_won": null,
+        "_validation": {
+          "flags": []
+        }
+      },
+      {
+        "series_label": "제121-2회",
+        "maturity": "3년",
+        "competition_ratio": null,
+        "coupon_guidance_band_bp": null,
+        "final_spread_bp": null,
+        "upsized": null,
+        "initial_offering_amount_raw": {
+          "value": 190000000000,
+          "unit": "원"
+        },
+        "initial_offering_amount_billion_won": 1900.0,
+        "demand_participation_amount_raw": null,
+        "demand_participation_amount_billion_won": null,
+        "final_issue_amount_raw": null,
+        "final_issue_amount_billion_won": null,
+        "_validation": {
+          "flags": []
+        }
+      }
+    ]
+  }
+}

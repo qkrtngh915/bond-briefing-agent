@@ -1,0 +1,56 @@
+{
+  "rcept_no": "20261020000383",
+  "extract_prompt_version": "1",
+  "result": {
+    "issuer": "키움에프앤아이(주)",
+    "credit_rating": null,
+    "tranches": [
+      {
+        "series_label": "제11-1회",
+        "maturity": "2년",
+        "competition_ratio": null,
+        "coupon_guidance_band_bp": null,
+        "final_spread_bp": null,
+        "upsized": null,
+        "initial_offering_amount_raw": {
+          "value": 115000000000,
+          "unit": "원"
+        },
+        "initial_offering_amount_billion_won": 1150.0,
+        "demand_participation_amount_raw": null,
+        "demand_participation_amount_billion_won": null,
+        "final_issue_amount_raw": {
+          "value": 115000000000,
+          "unit": "원"
+        },
+        "final_issue_amount_billion_won": 1150.0,
+        "_validation": {
+          "flags": []
+        }
+      },
+      {
+        "series_label": "제11-2회",
+        "maturity": "3년",
+        "competition_ratio": null,
+        "coupon_guidance_band_bp": null,
+        "final_spread_bp": null,
+        "upsized": null,
+        "initial_offering_amount_raw": {
+          "value": 80000000000,
+          "unit": "원"
+        },
+        "initial_offering_amount_billion_won": 800.0,
+        "demand_participation_amount_raw": null,
+        "demand_participation_amount_billion_won": null,
+        "final_issue_amount_raw": {
+          "value": 80000000000,
+          "unit": "원"
+        },
+        "final_issue_amount_billion_won": 800.0,
+        "_validation": {
+          "flags": []
+        }
+      }
+    ]
+  }
+}

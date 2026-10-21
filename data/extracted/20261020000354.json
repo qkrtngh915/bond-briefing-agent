@@ -1,0 +1,70 @@
+{
+  "rcept_no": "20261020000354",
+  "extract_prompt_version": "1",
+  "result": {
+    "issuer": "㈜삼양홀딩스",
+    "credit_rating": "AA-",
+    "tranches": [
+      {
+        "series_label": "제95-1회",
+        "maturity": "2년",
+        "competition_ratio": null,
+        "coupon_guidance_band_bp": {
+          "low_bp": -30,
+          "high_bp": 30
+        },
+        "final_spread_bp": null,
+        "upsized": null,
+        "initial_offering_amount_raw": null,
+        "initial_offering_amount_billion_won": null,
+        "demand_participation_amount_raw": null,
+        "demand_participation_amount_billion_won": null,
+        "final_issue_amount_raw": null,
+        "final_issue_amount_billion_won": null,
+        "_validation": {
+          "flags": []
+        }
+      },
+      {
+        "series_label": "제95-2회",
+        "maturity": "3년",
+        "competition_ratio": null,
+        "coupon_guidance_band_bp": {
+          "low_bp": -30,
+          "high_bp": 30
+        },
+        "final_spread_bp": null,
+        "upsized": null,
+        "initial_offering_amount_raw": null,
+        "initial_offering_amount_billion_won": null,
+        "demand_participation_amount_raw": null,
+        "demand_participation_amount_billion_won": null,
+        "final_issue_amount_raw": null,
+        "final_issue_amount_billion_won": null,
+        "_validation": {
+          "flags": []
+        }
+      },
+      {
+        "series_label": "제95-3회",
+        "maturity": "5년",
+        "competition_ratio": null,
+        "coupon_guidance_band_bp": {
+          "low_bp": -30,
+          "high_bp": 30
+        },
+        "final_spread_bp": null,
+        "upsized": null,
+        "initial_offering_amount_raw": null,
+        "initial_offering_amount_billion_won": null,
+        "demand_participation_amount_raw": null,
+        "demand_participation_amount_billion_won": null,
+        "final_issue_amount_raw": null,
+        "final_issue_amount_billion_won": null,
+        "_validation": {
+          "flags": []
+        }
+      }
+    ]
+  }
+}
